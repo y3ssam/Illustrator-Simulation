@@ -215,8 +215,11 @@ html,body{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
  .mobile-fatigue{display:block;padding:11px 13px;background:#fcf9f1;border:1px solid var(--line);border-radius:8px}
  .mobile-fatigue .status-heading{margin-bottom:6px}
  .mobile-fatigue .fatigue-meter.high>i{background:#b65d4b}
+ .window-bar>#settings-open{min-width:44px;min-height:44px}
  .note-tabs button,.mobile-queue-tabs button{min-height:44px}
  .job-controls button,.practice-strip button,.shop-item-controls button,.shop-inventory-item>button,.shop-upgrade-info button{min-height:44px}
+ .type-row .type-toggle,.automation-switch,.box-help-button{min-height:44px}
+ .box-help-button{width:44px}
  .job-controls{flex-wrap:wrap}
  .shop-item,.shop-sidebar,.shop-inventory-item{min-width:0}
 }
