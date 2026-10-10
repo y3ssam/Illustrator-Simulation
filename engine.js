@@ -101,6 +101,27 @@
     pick(items){let r=this.random()*items.reduce((a,b)=>a+b.weight,0);for(const item of items){r-=item.weight;if(r<0)return item;}return items.at(-1);}
     log(text){this.s.logs.unshift({at:this.s.now,text});this.s.logs=this.s.logs.slice(0,120);}
     money(amount){this.s.money+=amount;if(amount>=0)this.s.totals.income+=amount;else this.s.totals.expense-=amount;}
+    // A shop purchase consumes the item immediately; there is no inventory yet.
+    canPurchaseShopItem(item){
+      if(!item||typeof item!=='object'||typeof item.id!=='string'||!/^[a-z][a-z0-9_-]{0,63}$/.test(item.id)
+         ||typeof item.name!=='string'||!item.name.trim()||item.name.length>80
+         ||!Number.isSafeInteger(item.price)||item.price<0||item.price>1e9)return '아이템 정보를 확인해주세요.';
+      const effect=item.effect;
+      if(!effect||effect.type!=='fatigue_change'||!Number.isInteger(effect.amount)
+         ||effect.amount>=0||effect.amount< -100)return '아직 사용할 수 없는 아이템입니다.';
+      if(this.s.money<item.price)return '잔액이 부족합니다.';
+      if(this.s.fatigue<=0)return '피로도가 이미 0입니다.';
+      return '';
+    }
+    purchaseShopItem(item){
+      if(this.canPurchaseShopItem(item))return false;
+      const before=this.s.fatigue;
+      this.money(-item.price);
+      this.s.fatigue=Math.max(0,before+item.effect.amount);
+      const recovered=Number((before-this.s.fatigue).toFixed(2));
+      this.log(item.name+' 구매·사용 · '+item.price.toLocaleString('ko-KR')+'원 지출 / 피로도 '+recovered+' 감소');
+      return true;
+    }
     stats(){return {skill:this.s.skill,plan:this.s.plan,speed:this.s.speed};}
     slots(){const p=this.stats().plan;return 3+[10,25,50].filter(n=>p>=n).length;}
     reservationSlots(){return [5,10,15,20].filter(level=>this.s.level>=level).length;}
