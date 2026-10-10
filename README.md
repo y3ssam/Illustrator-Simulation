@@ -17,7 +17,14 @@
 - `docs/PROJECT-STATUS.md`: 진행 현황 및 다음 작업
 - `docs/CHANGELOG.md`: 변경 기록
 
-## 외부 리소스 확인
-이 저장소의 초기 소스는 사용자 제공 HTML/CSS/JS 7개 파일을 기준으로 합니다. CSS가 참조하는 `assets/01-desk.webp`, `assets/02-work-thumbnails.webp`, `assets/03-equipment.webp`, `assets/fonts/PretendardVariable.woff2`의 원본 파일은 이번에 제공되지 않았습니다. 배경 이미지와 서체를 동일하게 표현하려면 해당 리소스의 추가 등록이 필요합니다.
+## 개발 도구
+- [상점 아이템 편집기](tools/shop-editor.html): 아이템 정보·효과·아이콘 설정, 로컬 편집 저장, JSON 가져오기·내보내기
+- [상점 아이템 데이터](data/shop-items.json): 초기 예시 — 탄산음료 2,200원 / 사용 시 피로도 -10
+- `node tests/shop-item-data.test.js`: 아이템 시드·도구 정적 검사
+
+아이템 편집기는 **게임과 별도로 사용하는 개발용 페이지**입니다. 내보낸 JSON 파일만으로 게임 상점 구매/사용 시스템이 자동 구현되지는 않습니다. 아이콘 원본과 아이템 JSON은 GitHub에 따로 반영해야 합니다.
+
+## 리소스와 저장
+작업실 배경·썸네일과 Pretendard 폰트는 `assets/`에 있으며, 아이템 아이콘은 `assets/shop/`에 저장합니다. 이전 장비 업그레이드 기능은 제거되었으므로 `03-equipment.webp`는 필요하지 않습니다. 기존 장비 점검 이벤트는 업그레이드와 별개로 유지합니다.
 
 실제 플레이 진행 데이터(개인 브라우저 저장 JSON)는 소스 저장소에 자동 업로드하지 않습니다.
