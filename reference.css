@@ -250,7 +250,10 @@ html,body{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
 .list-pager button{min-width:54px;min-height:36px}
 .journal-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:14px 0 10px}
 .journal-tabs button{flex:1;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;box-shadow:none}
-.journal-tabs button[aria-pressed=true]{border-bottom-color:var(--brand);font-weight:700;color:var(--brand)}
+.journal-tabs button[aria-pressed=true]{background:transparent;border-bottom-color:var(--brand);font-weight:700;color:#385531}
+.journal{position:relative;height:100%;min-height:0;display:flex;flex-direction:column}
+.journal-list{flex:1;min-height:0;margin-bottom:48px;overflow-y:auto;scrollbar-width:thin}
+.journal>.list-pager{position:absolute;right:0;bottom:14px;left:0;margin:0}
 .journal-list .log{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:9px;align-items:start}
 .log-amount{white-space:nowrap;font-size:11px}
 .log-amount.income{color:#37694c}
