@@ -2,6 +2,8 @@
   'use strict';
   const VERSION = 3;
   const MAX_LEVEL = 100;
+  const STARTING_MONEY = 100000;
+  const PROMOTION_COST = 100000;
   const TYPES = ['낙서', '단색', '풀채색'], SCOPES = ['두상', '흉상', '반신', '전신'];
   const UNLOCKS = TYPES.flatMap((type,t)=>SCOPES.map((scope,c)=>({type,scope,level:[[0,0,2,5],[3,7,12,18],[9,14,21,25]][t][c]})));
   // Work times are base game minutes (one game minute = one real second before speed bonuses).
@@ -44,7 +46,7 @@
     });
   }
   function fresh(seed=Date.now()) {
-    return {version:VERSION,name:'어쩌구',now:420,money:0,level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,repair:'safe',restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],buffs:[],choices:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,eventClock:0,lastFoodWeek:0};
+    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,repair:'safe',restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],buffs:[],choices:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,eventClock:0,lastFoodWeek:0};
   }
   function validateSave(raw) {
     if (!raw || ![2,VERSION].includes(raw.version)) fail('지원하지 않는 저장 파일입니다.');
@@ -182,7 +184,7 @@
       if(this.s.level===MAX_LEVEL){this.s.exp=0;this.log('최고 레벨 100 달성');}
     }
     addStat(key){if(!['skill','plan','speed'].includes(key)||this.s.level<=50||this.s.points<1||this.s[key]>=150)return false;this.s[key]++;this.s.points--;return true;}
-    promotion(){if(this.s.buffs.some(b=>b.id==='promotion')||this.s.money<5000)return false;this.money(-5000);this.s.buffs.push({id:'promotion',name:'작업실 홍보',arrival:5,until:this.s.now+960});this.log('홍보 시작 · 5,000원 / 16게임시간 / 신규 의뢰 확률 +5%p');return true;}
+    promotion(){if(this.s.buffs.some(b=>b.id==='promotion')||this.s.money<PROMOTION_COST)return false;this.money(-PROMOTION_COST);this.s.buffs.push({id:'promotion',name:'작업실 홍보',arrival:5,until:this.s.now+960});this.log('홍보 시작 · '+PROMOTION_COST.toLocaleString('ko-KR')+'원 / 16게임시간 / 신규 의뢰 확률 +5%p');return true;}
     lotto(){const day=Math.floor(this.s.now/1440);if(this.s.lottoDay===day||this.s.money<1000)return null;this.s.lottoDay=day;this.money(-1000);const r=this.random(),prize=r<.5?0:r<.85?1000:r<.98?3000:10000;this.money(prize);this.log('복권 결과 '+prize+'원 · 하루 1장');return prize;}
     triggerEvent(id){const e=EVENTS.find(x=>x.id===id);if(!e)return false;if(e.duration){this.s.buffs=this.s.buffs.filter(b=>b.id!==id);this.s.buffs.push({...e,until:this.s.now+e.duration});this.log(e.name+' · '+e.desc);}else if(id==='fan'){this.s.fatigue=Math.max(0,this.s.fatigue-8);this.log(e.name+' · 피로 8 회복');}else if(id==='repair'){if(this.s.repair==='safe'&&this.s.money>=3000){this.money(-3000);this.log('장비 점검 완료 · 3,000원 지출');}else{this.s.buffs=this.s.buffs.filter(b=>b.id!=='repair-delay');this.s.buffs.push({id:'repair-delay',name:'장비 임시 사용',desc:'점검 대기 중 작업 속도 −15%.',speed:-.15,until:this.s.now+180});this.log('장비 임시 사용 · 3게임시간 속도 −15%');}}else if(!this.s.choices.length){this.s.choices.push({id:'exhibition'});this.log('전시 초대가 도착했습니다. 작업은 계속되고 선택은 기다립니다.');}return true;}
     resolveChoice(join){if(!this.s.choices.length||(join&&this.s.money<5000))return false;if(join){this.money(-5000);this.gainExp(40);this.log('작은 전시 참가 · 5,000원 지출 / 40 EXP');}else this.log('이번 전시는 쉬어갑니다.');this.s.choices=[];return true;}
@@ -208,6 +210,6 @@
     import(raw){const next=[2,VERSION].includes(raw?.version)?validateSave(raw):migrateLegacy(raw);this.s=next;this.log('저장 데이터 불러오기 완료');return true;}
     export(){return copy(this.s);}
   }
-  const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE,JOB_BALANCE};
+  const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE,JOB_BALANCE,STARTING_MONEY,PROMOTION_COST};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudioCore=api;
 })(globalThis);
