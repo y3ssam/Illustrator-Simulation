@@ -1,0 +1,51 @@
+{
+  "sketch/head": [
+    "assets/thumbnails/sketch/head/01.png",
+    "assets/thumbnails/sketch/head/02.png"
+  ],
+  "sketch/bust": [
+    "assets/thumbnails/sketch/bust/01.png",
+    "assets/thumbnails/sketch/bust/02.png"
+  ],
+  "sketch/half": [
+    "assets/thumbnails/sketch/half/01.png",
+    "assets/thumbnails/sketch/half/02.png",
+    "assets/thumbnails/sketch/half/03.png"
+  ],
+  "sketch/full": [
+    "assets/thumbnails/sketch/full/01.png",
+    "assets/thumbnails/sketch/full/02.png"
+  ],
+  "mono/head": [
+    "assets/thumbnails/mono/head/01.png",
+    "assets/thumbnails/mono/head/02.png"
+  ],
+  "mono/bust": [
+    "assets/thumbnails/mono/bust/01.png",
+    "assets/thumbnails/mono/bust/02.png"
+  ],
+  "mono/half": [
+    "assets/thumbnails/mono/half/01.png",
+    "assets/thumbnails/mono/half/02.png"
+  ],
+  "mono/full": [
+    "assets/thumbnails/mono/full/01.png",
+    "assets/thumbnails/mono/full/02.png"
+  ],
+  "color/head": [
+    "assets/thumbnails/color/head/01.png",
+    "assets/thumbnails/color/head/02.png"
+  ],
+  "color/bust": [
+    "assets/thumbnails/color/bust/01.png",
+    "assets/thumbnails/color/bust/02.png"
+  ],
+  "color/half": [
+    "assets/thumbnails/color/half/01.png",
+    "assets/thumbnails/color/half/02.png"
+  ],
+  "color/full": [
+    "assets/thumbnails/color/full/01.png",
+    "assets/thumbnails/color/full/02.png"
+  ]
+}

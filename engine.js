@@ -8,6 +8,10 @@
   const UPGRADE_RATE_STEPS = [3,5,7,10,15];
   const UPGRADE_COSTS = [250000,750000,1500000,5500000,20000000];
   const TYPES = ['낙서', '단색', '풀채색'], SCOPES = ['두상', '흉상', '반신', '전신'];
+  const THUMB_TYPES = {낙서:'sketch',단색:'mono',풀채색:'color'};
+  const THUMB_SCOPES = {두상:'head',흉상:'bust',반신:'half',전신:'full'};
+  const thumbnailPath = (path,type,scope) => typeof path==='string' && path.length<=250 &&
+    new RegExp('^assets/thumbnails/'+THUMB_TYPES[type]+'/'+THUMB_SCOPES[scope]+'/[^/\\\\?#]+\\.(?:png|jpg|jpeg|webp|gif)$','i').test(path);
   const UNLOCKS = TYPES.flatMap((type,t)=>SCOPES.map((scope,c)=>({type,scope,level:[[0,0,2,5],[3,7,12,18],[9,14,21,25]][t][c]})));
   // Work times are base game minutes (one game minute = one real second before speed bonuses).
   // Payout ranges are base money before skill bonuses, rolled once per new job.
@@ -88,6 +92,7 @@
       return rows.map(q=>{
         if(!q||!idOK(q.id)||jobIDs.has(q.id)||!TYPES.includes(q.type)||!SCOPES.includes(q.scope)||!['normal','outsourcing'].includes(q.source))fail('의뢰 정보가 올바르지 않습니다.');jobIDs.add(q.id);
         const j={id:q.id,type:q.type,scope:q.scope,source:q.source,gold:number(q.gold,0,1e12,'의뢰 보상'),exp:number(q.exp,0,100000,'의뢰 경험치',true),work:number(q.work,.001,1e7,'작업량'),done:number(q.done,0,q.work,'진행도'),deadline:number(q.deadline,0,1e10,'마감'),expires:number(q.expires,0,1e10,'제안 만료'),inboxWait:number(q.inboxWait??0,0,1439,'도착함 대기 시간',true)};
+        if(thumbnailPath(q.thumbnail,q.type,q.scope))j.thumbnail=q.thumbnail;
         if(q.source==='outsourcing'){if(!idOK(q.applicant))fail('신청자 ID가 올바르지 않습니다.');j.applicant=q.applicant;}return j;
       });
     };
@@ -124,7 +129,30 @@
     s.logs=[{at:s.now,text:'원본 저장을 가져왔습니다. 진행도는 보존하고 이전 임시 효과는 정리했습니다.'}];return validateSave(s);
   }
   class Engine {
-    constructor(state,catalog=[]) {this.s=state?validateSave(state):fresh();this.catalog=validateCatalog(catalog);}
+    constructor(state,catalog=[]) {this.s=state?validateSave(state):fresh();this.catalog=validateCatalog(catalog);this.thumbnailIndex=null;}
+    setThumbnailIndex(index){
+      if(!index||typeof index!=='object'||Array.isArray(index))return false;
+      const next={};
+      for(const type of TYPES)for(const scope of SCOPES){
+        const key=THUMB_TYPES[type]+'/'+THUMB_SCOPES[scope],paths=index[key];
+        if(!Array.isArray(paths))return false;
+        next[key]=paths.filter(path=>thumbnailPath(path,type,scope));
+      }
+      this.thumbnailIndex=next;
+      return true;
+    }
+    assignThumbnail(job){
+      if(job.thumbnail||!this.thumbnailIndex)return false;
+      const paths=this.thumbnailIndex[THUMB_TYPES[job.type]+'/'+THUMB_SCOPES[job.scope]];
+      if(!paths?.length)return false;
+      job.thumbnail=paths[Math.floor(Math.random()*paths.length)];
+      return true;
+    }
+    assignMissingThumbnails(){
+      let changed=false;
+      for(const job of [...this.s.jobs,...this.s.inbox,...this.s.reservations])changed=this.assignThumbnail(job)||changed;
+      return changed;
+    }
     random(){let x=this.s.seed;x^=x<<13;x^=x>>>17;x^=x<<5;this.s.seed=(x>>>0)||1;return this.s.seed/4294967296;}
     pick(items){let r=this.random()*items.reduce((a,b)=>a+b.weight,0);for(const item of items){r-=item.weight;if(r<0)return item;}return items.at(-1);}
     log(text){this.s.logs.unshift({at:this.s.now,text});this.s.logs=this.s.logs.slice(0,120);}
@@ -208,7 +236,7 @@
         gold:Math.floor(roll(balance.gold)*(1+this.stats().skill*.005)),
         work:roll(balance.work),done:0,
         deadline:this.s.now+(2+Math.floor(this.random()*4))*1440,expires:this.s.now+720,inboxWait:0};
-      if(applicant){j.applicant=applicant.id;j.gold=Math.floor(j.gold*1.7);j.exp=Math.floor(j.exp*1.25);}return j;
+      if(applicant){j.applicant=applicant.id;j.gold=Math.floor(j.gold*1.7);j.exp=Math.floor(j.exp*1.25);}this.assignThumbnail(j);return j;
     }
     startFresh(name){if(typeof name!=='string'||!name.trim())return false;this.s=fresh();this.s.name=name.trim().slice(0,40);this.log('작업실을 열었습니다. 낙서 두상·흉상으로 시작하고, 의뢰가 없으면 자동으로 연습합니다.');return true;}
     startPractice(){if(this.s.active||this.s.restUntil>this.s.now)return false;this.s.practicing=true;this.log('그림 연습 시작 · '+PRACTICE.duration+'게임분 / '+PRACTICE.exp+' EXP / 중단 시 진행도 보존');return true;}
@@ -277,7 +305,7 @@
       if(++this.s.eventClock>=48){this.s.eventClock=0;if(this.random()<.12)this.triggerEvent(EVENTS[Math.floor(this.random()*EVENTS.length)].id);}
       this.admit();
     }}
-    import(raw){const next=[2,VERSION].includes(raw?.version)?validateSave(raw):migrateLegacy(raw);this.s=next;this.log('저장 데이터 불러오기 완료');return true;}
+    import(raw){const next=[2,VERSION].includes(raw?.version)?validateSave(raw):migrateLegacy(raw);this.s=next;this.assignMissingThumbnails();this.log('저장 데이터 불러오기 완료');return true;}
     export(){return copy(this.s);}
   }
   const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE,JOB_BALANCE,STARTING_MONEY,PROMOTION_COST,OFFLINE_BASE_RATE,UPGRADE_RATE_STEPS,UPGRADE_COSTS,WEEKLY_FOOD_COST};

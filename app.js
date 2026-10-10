@@ -10,6 +10,7 @@
  let onboarding=false,holdingControl=false,pendingRender=false,notesOpen=innerWidth>=1050,noteTab='stats',queueTab='waiting',dragJob=null;
  let engine,tab='studio',storageOK=true,pausedOther=false,last=Date.now(),accumulator=0,lastSave=0,away=null,toastTimer;
  let shopItems=[],shopState='loading';
+ const failedThumbnails=new Set();
  let offlineMode=document.hidden,savedAt=null,segments=[],catchUpScheduled=false;
  let token=crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random();
  try{const existing=sessionStorage.getItem(LEASE+'.tab');if(existing)token=existing;else sessionStorage.setItem(LEASE+'.tab',token);}catch{}
@@ -44,7 +45,16 @@
  function jobName(q){const a=engine.catalog.find(a=>a.id===q.applicant);return q.source==='outsourcing'?(a?a.name+' · ':'외주 · ')+q.type+' '+q.scope:q.type+' '+q.scope;}
  function logs(limit){return engine.s.logs.slice(0,limit).map(l=>`<div class="log"><time>${stamp(l.at)}</time><span>${esc(l.text)}</span></div>`).join('')||'<p class="empty">운영 기록이 아직 없어요.</p>';}
  const thumbIndex=q=>{if(!q)return 0;const types=['낙서','단색','풀채색'],scopes=['두상','흉상','반신','전신'];return (types.indexOf(q.type)*4+scopes.indexOf(q.scope))%6;};
- const thumb=q=>`<span class="work-thumb tile-${thumbIndex(q)}" role="img" aria-label="장식용 그림 썸네일"></span>`;
+ const thumb=q=>`<span class="work-thumb tile-${thumbIndex(q)}" role="img" aria-label="장식용 그림 썸네일">${q?.thumbnail&&!failedThumbnails.has(q.thumbnail)?`<img src="${esc(q.thumbnail)}" alt="" loading="lazy">`:''}</span>`;
+ async function loadThumbnailIndex(){
+   try{
+     const response=await fetch('data/thumbnail-index.json',{cache:'no-store'});
+     if(!response.ok)throw new Error('이미지 목록을 읽지 못했습니다.');
+     if(!engine.setThumbnailIndex(await response.json()))throw new Error('이미지 목록 형식이 올바르지 않습니다.');
+     if(!pausedOther&&engine.assignMissingThumbnails())save();
+     render();
+   }catch(error){console.warn('의뢰 썸네일 목록:',error);}
+ }
  const dayLeft=q=>Math.max(0,Math.ceil((q.deadline-engine.s.now)/1440));
  function timeline(){const rows=[...engine.s.jobs].sort((a,b)=>a.deadline-b.deadline);return `<section class="deadline-section"><div class="section-head"><h2>마감 레일</h2></div><div class="timeline">${rows.map(q=>`<button class="deadline-node ${q.id===engine.s.active?'current':''}" data-action="select:${q.id}" ${engine.s.restUntil>engine.s.now||q.id===engine.s.active?'disabled':''}>${thumb(q)}<span class="deadline-content"><span class="day-tag ${dayLeft(q)<=1?'urgent':''}">D-${dayLeft(q)}</span><strong>${esc(q.type+' '+q.scope)}</strong><small>${icon('coin')} ${won(q.gold)}</small></span></button>`).join('')||'<div class="rail-empty">마감까지 여유로운 하루예요. 첫 의뢰를 기다리며 그림을 연습해요.</div>'}</div></section>`;}
  function jobRows(inbox=false,subset,reserved=false){const s=engine.s,rows=subset||(inbox?s.inbox:reserved?s.reservations:engine.orderedJobs()),p=engine.projection();return rows.map(q=>{const reason=inbox||reserved?engine.canAccept(q):'',active=s.active===q.id,risk=!inbox&&!reserved&&p.get(q.id)>q.deadline,reserveReason=engine.canReserve(q);return `<article class="job ${active?'active':''}" draggable="${!pausedOther}" data-job="${q.id}" data-source="${inbox?'inbox':reserved?'reserved':active?'active':'waiting'}">${thumb(q)}<div class="job-text"><strong>${esc(jobName(q))}</strong><div class="job-progress"><div class="track"><div class="fill" style="width:${q.done/q.work*100}%"></div></div><small>${(q.done/q.work*100).toFixed(0)}%</small></div><small class="${risk?'risk':''}">${inbox?won(q.gold)+' · 수락 후 '+duration(q.deadline-s.now)+'<br>취소 판정까지 '+duration(1440-(q.inboxWait??0)):reserved?won(q.gold)+' · 기한 정지 · 취소 없음':active&&s.restUntil>s.now?'수면 대기 · 진행도 보존':q.exp+' EXP · '+won(q.gold)}</small>${reason?`<small class="blocked-reason">대기함: ${esc(reason)}</small>`:''}</div><div class="job-edge"><span class="drag-handle" aria-hidden="true">⠿</span><small class="${!inbox&&!reserved&&(dayLeft(q)<=1||risk)?'risk':''}">D-${dayLeft(q)}</small></div><div class="job-controls">${inbox||reserved?button('accept:'+q.id,'대기함으로',!!reason||pausedOther):active?'<span class="muted">진행 중</span>':button('select:'+q.id,'작업 시작',s.restUntil>s.now)}${!reserved&&!active?button('reserve:'+q.id,'예약',!!reserveReason||pausedOther,`title="${esc(reserveReason||'기한을 멈추고 안전하게 예약해요.')}"`):''}${!inbox&&!reserved&&!active?button('up:'+q.id,'↑',false,'aria-label="이 의뢰를 한 칸 앞으로"')+button('down:'+q.id,'↓',false,'aria-label="이 의뢰를 한 칸 뒤로"'):''}</div></article>`;}).join('');}
@@ -235,7 +245,7 @@
  function takeover(){try{const raw=localStorage.getItem(KEY);if(raw){engine.import(JSON.parse(raw));onboarding=false;$('welcome').close();}claim(true);pausedOther=false;last=Date.now();accumulator=0;$('storage-note').hidden=true;$('welcome-takeover').hidden=true;render();save();}catch(error){if(onboarding)$('welcome-error').textContent=error.message;else note(error.message);}}
  $('storage-note').onclick=e=>{if(e.target.closest('.notice-dismiss'))$('storage-note').hidden=true;else if(e.target.id==='takeover')takeover();};
  $('welcome-takeover').onclick=takeover;$('settings-takeover').onclick=()=>{takeover();$('readonly-setting').hidden=!pausedOther;};
- document.addEventListener('error',e=>{if(e.target.tagName==='IMG'){const p=document.createElement('div');p.className='unknown';p.textContent='이미지 연결 확인';p.style.fontSize='13px';e.target.replaceWith(p);}},true);
+ document.addEventListener('error',e=>{if(e.target.tagName==='IMG'){if(e.target.closest('.work-thumb')){failedThumbnails.add(e.target.getAttribute('src'));e.target.remove();return;}const p=document.createElement('div');p.className='unknown';p.textContent='이미지 연결 확인';p.style.fontSize='13px';e.target.replaceWith(p);}},true);
  document.addEventListener('visibilitychange',()=>{if(document.hidden){tick();offlineMode=true;away={money:engine.s.money,...engine.s.totals};save();}else{tick();offlineMode=false;updateReport();}});
  addEventListener('pagehide',()=>{tick();save();try{const lease=JSON.parse(localStorage.getItem(LEASE)||'null');if(lease?.token===token)localStorage.removeItem(LEASE);}catch{}});
  addEventListener('storage',e=>{if(e.key!==LEASE||!e.newValue)return;try{const other=JSON.parse(e.newValue);if(other.token!==token&&other.until>Date.now()){suspend();render();}}catch{}});
@@ -244,7 +254,7 @@
  $('welcome-import').onclick=()=>{if(pausedOther){$('welcome-error').textContent='다른 창에서 운영 중입니다.';return;}$('import-file').click();};
  document.querySelectorAll('[data-tab] .nav-icon').forEach(el=>{const page=el.parentElement.dataset.tab;el.innerHTML=icon(({studio:'monitor',home:'home',shop:'coin',gacha:'spark',journal:'book'})[page]);});
  addEventListener('resize',()=>{render();});
- loadShopItems();render();if(onboarding){$('save-status').textContent='이름을 입력하면 시작해요';$('welcome').showModal();}else save();setInterval(tick,500);
+ loadShopItems();loadThumbnailIndex();render();if(onboarding){$('save-status').textContent='이름을 입력하면 시작해요';$('welcome').showModal();}else save();setInterval(tick,500);
  // 테스트와 추후 외주 데이터 연결에 쓰는 엔진. 화면은 이 상태를 읽습니다.
  globalThis.studioGame={engine,render,tick,save};
 })();

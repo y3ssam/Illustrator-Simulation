@@ -195,3 +195,7 @@ html,body{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
   .studio-inline-note .note-body>*{max-width:100%}
   .studio-inline-note .skill-notes{min-width:0}
 }
+
+/* Keep the original sprite visible if a saved thumbnail cannot load. */
+.work-thumb{overflow:hidden}
+.work-thumb>img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}

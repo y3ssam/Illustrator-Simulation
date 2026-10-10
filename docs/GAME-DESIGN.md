@@ -139,4 +139,7 @@
 - 업로드된 썸네일 25개 PNG를 **파일 내용 및 파일명 변경 없이** 영문 경로로 이동했다: `assets/thumbnails/낙서/` → `assets/thumbnails/sketch/`, `단색/` → `mono/`, `풀채색/` → `color/`.
 - 하위 구도 폴더는 `두상/` → `head/`, `흉상/` → `bust/`, `반신/` → `half/`, `전신/` → `full/`. 총 12개 구도 폴더, 이미지 25장.
 - 파일 구분용 숫자 이름(`01.png` 등)과 Git blob SHA는 모두 유지한다. 새로운 썸네일은 각 영문 분류 폴더에 추가한다.
-- **현재 작업은 경로 변경만이다.** 기존 의뢰의 이미지 선택 로직과 스프라이트 방식, 저장 데이터는 변경하지 않았다. 의뢰 타입별 랜덤 선택·이미지 인덱스 자동 갱신은 별도 구현 작업으로 남는다.
+- 의뢰 생성 시 채색 타입(`낙서/단색/풀채색` → `sketch/mono/color`)과 구도(`두상/흉상/반신/전신` → `head/bust/half/full`)에 맞는 `data/thumbnail-index.json` 목록에서 한 장을 무작위 선택해 의뢰의 `thumbnail`에 저장한다. 이후 화면 이동·저장·불러오기에서 다시 추첨하지 않는다.
+- 기존 v2/v3 저장의 `jobs`, `inbox`, `reservations`에 `thumbnail`이 없는 의뢰는 이미지 목록 로딩 후 한 번만 배정해 다시 저장한다. 기존에 배정된 경로는 파일이 목록에서 사라져도 바꾸지 않고, 파일 로딩 오류 시 기존 스프라이트를 보여준다. 목록 자체가 비었거나 읽히지 않으면 스프라이트를 사용한다. 저장 버전 v3과 키 `studio.workbench.v2`는 유지한다.
+- `scripts/generate-thumbnail-index.js`는 12개 폴더의 PNG/JPG/JPEG/WebP/GIF 파일을 실제로 열거한다. `main`의 `assets/thumbnails/**` 변경 시 GitHub Actions가 인덱스의 차이가 있을 때만 커밋하고 GitHub Pages 빌드를 요청한다. 번호가 비연속적이어도 모든 실제 파일을 포함한다.
+
