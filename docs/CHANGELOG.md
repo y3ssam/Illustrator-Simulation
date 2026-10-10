@@ -2,7 +2,7 @@
 
 ## 2026-10-11 — 의뢰 썸네일 자동 연결
 - `engine.js`: 신규 의뢰에 타입·구도별 이미지 경로를 한 번 배정해 v3 저장에 포함. 기존 저장의 의뢰는 인덱스 로딩 후 누락된 경우에만 배정.
-- `app.js`, `reference.css`: 현재 작업·마감 레일·대기함·예약함·도착함의 기존 썸네일 자리에 이미지 표시. 로딩 실패 시 기존 스프라이트 유지.
+- `app.js`, `reference.css`, `index.html`: 현재 작업·마감 레일·대기함·예약함·도착함의 기존 썸네일 자리에 이미지 표시. 로딩 실패 시 기존 스프라이트 유지. 변경된 스크립트·스타일 주소의 캐시 갱신.
 - `data/thumbnail-index.json`, `scripts/generate-thumbnail-index.js`: 실제 25개 이미지의 분류별 목록과 12개 폴더 자동 스캔 도구 추가.
 - `.github/workflows/thumbnail-index.yml`: 이미지 추가·삭제 시 인덱스 차이가 있으면 커밋하고 기존 브랜치 배포의 Pages 빌드 요청.
 - `tests/thumbnail-index.test.js`: 12개 분류, 비연속 번호, 추가·삭제, 무작위 선택, 의뢰 이동·저장 호환 검증.
