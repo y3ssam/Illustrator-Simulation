@@ -46,6 +46,11 @@
   function fresh(seed=Date.now()) {
     return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,offlineUpgrades:{tablet:0,chair:0},inventory:{},level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,practiceDuration:PRACTICE.duration,restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,lastFoodWeek:0};
   }
+  function legacyLogCategory(text) {
+    if(/납품(?: \(오프라인\))? ·|^중복 작업물 |원 환급$/.test(text))return 'income';
+    if(/^주간 식비 |단계 업그레이드 ·| 구매 · .*원 지출/.test(text))return 'expense';
+    return 'event';
+  }
   function validateSave(raw) {
     if (!raw || ![2,VERSION].includes(raw.version)) fail('지원하지 않는 저장 파일입니다.');
     const s=fresh();
@@ -93,14 +98,21 @@
     // They must neither reject a valid legacy save nor affect the resumed game.
     if(!Array.isArray(raw.met)||raw.met.length>500||raw.met.some(x=>!idOK(x)))fail('신청자 기록을 확인해주세요.');s.met=[...new Set(raw.met)];
     if(!Array.isArray(raw.collection)||raw.collection.length>100000||raw.collection.some(x=>typeof x!=='string'||!/^([a-zA-Z0-9_-]{1,80})\/([a-zA-Z0-9_-]{1,80})$/.test(x)))fail('도감 기록을 확인해주세요.');s.collection=[...new Set(raw.collection)];
-    if(!Array.isArray(raw.logs)||raw.logs.length>120)fail('기록 목록을 확인해주세요.');s.logs=raw.logs.map(l=>{if(typeof l.text!=='string'||l.text.length>500)fail('기록을 확인해주세요.');return {at:number(l.at,0,1e10,'기록 시간'),text:l.text};});
+    if(!Array.isArray(raw.logs)||raw.logs.length>1000)fail('기록 목록을 확인해주세요.');s.logs=raw.logs.map(l=>{
+      if(!l||typeof l.text!=='string'||l.text.length>500)fail('기록을 확인해주세요.');
+      const category=l.category===undefined?legacyLogCategory(l.text):l.category;
+      if(!['income','expense','event'].includes(category))fail('기록 분류를 확인해주세요.');
+      const record={at:number(l.at,0,1e10,'기록 시간'),category,text:l.text};
+      if(l.amount!==undefined){if(category==='event')fail('사건 기록 금액을 확인해주세요.');record.amount=number(l.amount,category==='income'?0:-1e12,category==='income'?1e12:0,'거래 금액');if(category==='income'&&record.amount<=0||category==='expense'&&record.amount>=0)fail('거래 금액 부호를 확인해주세요.');}
+      return record;
+    });
     for(const k of Object.keys(s.totals))s.totals[k]=number(k==='practiceSessions'?(raw.totals?.[k]??0):raw.totals?.[k],0,1e15,'누적 기록');
     if(raw.version===2){
       s.level=Math.min(MAX_LEVEL,s.level);s.exp=s.level===MAX_LEVEL?0:s.exp;
       s.skill=s.plan=s.speed=Math.min(50,s.level);s.points=Math.max(0,s.level-50)*2;
       const refund=Object.values(oldEquipment).reduce((sum,n)=>sum+2500*n*(n+3),0);
       s.money=number(s.money+refund,-1e12,1e12,'환산 잔액');s.totals.income+=refund;
-      s.logs.unshift({at:s.now,text:'새 성장 규칙 적용 · 스탯·포인트 환산 / 장비 강화비 '+refund.toLocaleString('ko-KR')+'원 환급'});s.logs=s.logs.slice(0,120);
+      s.logs.unshift({at:s.now,category:refund>0?'income':'event',text:'새 성장 규칙 적용 · 스탯·포인트 환산 / 장비 강화비 '+refund.toLocaleString('ko-KR')+'원 환급',...(refund>0?{amount:refund}:{})});s.logs=s.logs.slice(0,1000);
     }
     if(s.level===MAX_LEVEL)s.exp=0;
     return s;
@@ -115,7 +127,7 @@
     s.jobs=jobs.filter(q=>['working','paused','pending'].includes(q.status)).slice(0,15).map(q=>{
       const work=Number(q.duration)*1.6;const j={id:'m'+(++s.seq),type:q.type,scope:q.scope,source:'normal',gold:Number(q.gold),exp:Number(q.exp),work,done:work*Math.min(100,Math.max(0,Number(q.progress)||0))/100,deadline:(Number(q.startDay)||0)*1440+(Number(q.startMinute)||0)+Number(q.deadline)*1440,expires:s.now};if(q.status==='working')s.active=j.id;return j;
     });
-    s.logs=[{at:s.now,text:'원본 저장을 가져왔습니다. 진행도는 보존하고 이전 임시 효과는 정리했습니다.'}];return validateSave(s);
+    s.logs=[{at:s.now,category:'event',text:'원본 저장을 가져왔습니다. 진행도는 보존하고 이전 임시 효과는 정리했습니다.'}];return validateSave(s);
   }
   class Engine {
     constructor(state,catalog=[]) {this.s=state?validateSave(state):fresh();this.catalog=validateCatalog(catalog);this.thumbnailIndex=null;}
@@ -144,7 +156,7 @@
     }
     random(){let x=this.s.seed;x^=x<<13;x^=x>>>17;x^=x<<5;this.s.seed=(x>>>0)||1;return this.s.seed/4294967296;}
     pick(items){let r=this.random()*items.reduce((a,b)=>a+b.weight,0);for(const item of items){r-=item.weight;if(r<0)return item;}return items.at(-1);}
-    log(text){this.s.logs.unshift({at:this.s.now,text});this.s.logs=this.s.logs.slice(0,120);}
+    log(text,category='event',amount){this.s.logs.unshift({at:this.s.now,category,text,...(amount===undefined?{}:{amount})});this.s.logs.length=Math.min(this.s.logs.length,1000);}
     money(amount){this.s.money+=amount;if(amount>=0)this.s.totals.income+=amount;else this.s.totals.expense-=amount;}
     offlineRate(kind){
       const level=this.s.offlineUpgrades[kind]??0;
@@ -163,7 +175,7 @@
       const cost=UPGRADE_COSTS[level];
       this.money(-cost);
       this.s.offlineUpgrades[kind]=level+1;
-      this.log((kind==='tablet'?'액정 타블렛':'의자')+' '+(level+1)+'단계 업그레이드 · '+cost.toLocaleString('ko-KR')+'원 지출 / 오프라인 '+(kind==='tablet'?'수익':'EXP')+' '+this.offlineRate(kind)+'%');
+      this.log((kind==='tablet'?'액정 타블렛':'의자')+' '+(level+1)+'단계 업그레이드 · '+cost.toLocaleString('ko-KR')+'원 지출 / 오프라인 '+(kind==='tablet'?'수익':'EXP')+' '+this.offlineRate(kind)+'%','expense',-cost);
       return true;
     }
     // Shop items use their stable catalog IDs as inventory keys.
@@ -186,7 +198,7 @@
       if(this.canPurchaseShopItem(item))return false;
       this.money(-item.price);
       this.s.inventory[item.id]=this.inventoryCount(item.id)+1;
-      this.log(item.name+' 구매 · '+item.price.toLocaleString('ko-KR')+'원 지출 / 보유 '+this.inventoryCount(item.id)+'개');
+      this.log(item.name+' 구매 · '+item.price.toLocaleString('ko-KR')+'원 지출 / 보유 '+this.inventoryCount(item.id)+'개','expense',-item.price);
       return true;
     }
     canUseShopItem(item){
@@ -269,8 +281,8 @@
       if(this.s.level===MAX_LEVEL){this.s.exp=0;this.log('최고 레벨 100 달성');}
     }
     addStat(key){if(!['skill','plan','speed'].includes(key)||this.s.level<=50||this.s.points<1||this.s[key]>=150)return false;this.s[key]++;this.s.points--;return true;}
-    lotto(){const day=Math.floor(this.s.now/1440);if(this.s.lottoDay===day||this.s.money<1000)return null;this.s.lottoDay=day;this.money(-1000);const r=this.random(),prize=r<.5?0:r<.85?1000:r<.98?3000:10000;this.money(prize);this.log('복권 결과 '+prize+'원 · 하루 1장');return prize;}
-    grantCollection(applicantID){const a=this.catalog.find(x=>x.id===applicantID);if(!a||!a.works.length){this.log('외주 완료 · 작업물 데이터가 없어 수집 처리를 보류했습니다.');return;}const w=this.pick(a.works),key=a.id+'/'+w.id;if(!this.s.met.includes(a.id))this.s.met.push(a.id);if(this.s.collection.includes(key)){const tip=TIPS[w.tier];this.money(tip);this.s.totals.tips+=tip;this.log('중복 작업물 «'+w.title+'» · '+tip+'원 팁');}else{this.s.collection.push(key);this.log('새 작업물 «'+w.title+'» 도감 등록');}}
+    lotto(){const day=Math.floor(this.s.now/1440);if(this.s.lottoDay===day||this.s.money<1000)return null;this.s.lottoDay=day;this.money(-1000);this.log('복권 구매 · 하루 1장','expense',-1000);const r=this.random(),prize=r<.5?0:r<.85?1000:r<.98?3000:10000;this.money(prize);this.log('복권 결과 '+prize+'원',prize>0?'income':'event',prize>0?prize:undefined);return prize;}
+    grantCollection(applicantID){const a=this.catalog.find(x=>x.id===applicantID);if(!a||!a.works.length){this.log('외주 완료 · 작업물 데이터가 없어 수집 처리를 보류했습니다.');return;}const w=this.pick(a.works),key=a.id+'/'+w.id;if(!this.s.met.includes(a.id))this.s.met.push(a.id);if(this.s.collection.includes(key)){const tip=TIPS[w.tier];this.money(tip);this.s.totals.tips+=tip;this.log('중복 작업물 «'+w.title+'» · '+tip+'원 팁','income',tip);}else{this.s.collection.push(key);this.log('새 작업물 «'+w.title+'» 도감 등록');}}
     complete(q,offline=false){
       this.s.jobs=this.s.jobs.filter(j=>j!==q);
       this.s.queueOrder=this.s.queueOrder.filter(id=>id!==q.id);
@@ -278,7 +290,7 @@
       const gold=offline?Math.floor(q.gold*this.offlineRate('tablet')/100):q.gold;
       const exp=offline?Math.floor(q.exp*this.offlineRate('chair')/100):q.exp;
       this.money(gold);this.s.totals.completed++;this.gainExp(exp);
-      this.log(q.type+' '+q.scope+' 납품'+(offline?' (오프라인)':'')+' · '+gold+'원 / '+exp+' EXP');
+      this.log(q.type+' '+q.scope+' 납품'+(offline?' (오프라인)':'')+' · '+gold+'원 / '+exp+' EXP','income',gold);
       if(q.source==='outsourcing')this.grantCollection(q.applicant);
     }
     arrivals(){if(!this.openTypes().length)return;const chance=this.arrivalChance();if(this.random()*100<chance)this.s.inbox.push(this.createJob());const available=this.catalog.filter(a=>a.works.length&&a.minLevel<=this.s.level&&a.minSkill<=this.stats().skill);if(available.length&&this.random()*100<Math.min(5,.5+(this.s.level-1)*.03+this.stats().skill*.005)){const a=this.pick(available);this.s.inbox.push(this.createJob('outsourcing',a));if(!this.s.met.includes(a.id))this.s.met.push(a.id);this.log(a.name+'의 외주 제안 도착');}}
@@ -292,7 +304,7 @@
       else if(q){q.done=Math.min(q.work,q.done+this.rate());this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate());if(q.done>=q.work&&this.s.now<=q.deadline)this.complete(q,offline);}
       else if(this.s.autoPractice||this.s.practicing){this.s.practiceDone++;this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate()*.5);if(this.s.practiceDone>=PRACTICE.duration){this.s.practiceDone=0;this.s.practicing=false;this.s.totals.practiceSessions++;const practiceExp=offline?Math.floor(PRACTICE.exp*this.offlineRate('chair')/100):PRACTICE.exp;this.gainExp(practiceExp);this.log('그림 연습 완료'+(offline?' (오프라인)':'')+' · '+practiceExp+' EXP');}}
       for(const j of [...this.s.jobs])if(j.deadline<=this.s.now){this.s.jobs=this.s.jobs.filter(k=>k!==j);this.s.queueOrder=this.s.queueOrder.filter(id=>id!==j.id);if(this.s.active===j.id)this.s.active=null;this.s.totals.failed++;this.log(j.type+' '+j.scope+' 마감 초과 · 의뢰 종료');}
-      const week=Math.floor(this.s.now/10080);if(week>this.s.lastFoodWeek){const cost=(week-this.s.lastFoodWeek)*WEEKLY_FOOD_COST;this.money(-cost);this.s.lastFoodWeek=week;this.log('주간 식비 '+cost+'원 지출');}
+      const week=Math.floor(this.s.now/10080);if(week>this.s.lastFoodWeek){const cost=(week-this.s.lastFoodWeek)*WEEKLY_FOOD_COST;this.money(-cost);this.s.lastFoodWeek=week;this.log('주간 식비 '+cost+'원 지출','expense',-cost);}
       if(++this.s.arrivalClock>=10){this.s.arrivalClock=0;this.arrivals();}
       this.admit();
     }}
