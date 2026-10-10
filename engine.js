@@ -4,6 +4,9 @@
   const MAX_LEVEL = 100;
   const STARTING_MONEY = 100000;
   const PROMOTION_COST = 100000;
+  const OFFLINE_BASE_RATE = 10;
+  const UPGRADE_RATE_STEPS = [3,5,7,10,15];
+  const UPGRADE_COSTS = [250000,750000,1500000,5500000,20000000];
   const TYPES = ['낙서', '단색', '풀채색'], SCOPES = ['두상', '흉상', '반신', '전신'];
   const UNLOCKS = TYPES.flatMap((type,t)=>SCOPES.map((scope,c)=>({type,scope,level:[[0,0,2,5],[3,7,12,18],[9,14,21,25]][t][c]})));
   // Work times are base game minutes (one game minute = one real second before speed bonuses).
@@ -46,7 +49,7 @@
     });
   }
   function fresh(seed=Date.now()) {
-    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,repair:'safe',restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],buffs:[],choices:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,eventClock:0,lastFoodWeek:0};
+    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,offlineUpgrades:{tablet:0,chair:0},level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,repair:'safe',restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],buffs:[],choices:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,eventClock:0,lastFoodWeek:0};
   }
   function validateSave(raw) {
     if (!raw || ![2,VERSION].includes(raw.version)) fail('지원하지 않는 저장 파일입니다.');
@@ -55,6 +58,7 @@
     s.name=raw.name;
     for(const k of ['now','restUntil'])s[k]=number(raw[k],0,1e10,k);
     s.money=number(raw.money,-1e12,1e12,'잔액');
+    for(const key of ['tablet','chair'])s.offlineUpgrades[key]=number(raw.offlineUpgrades?.[key]??0,0,5,'오프라인 업그레이드',true);
     for(const k of ['level','points','skill','plan','speed','seq','lastFoodWeek'])s[k]=number(raw[k],0,raw.version===2?1e7:(k==='level'?100:k==='points'?100:['skill','plan','speed'].includes(k)?150:1e7),k,true);
     s.exp=number(raw.exp,0,99,'경험치',true);s.fatigue=number(raw.fatigue,0,100,'피로');s.seed=number(raw.seed,1,4294967295,'난수 상태',true);
     for(const k of ['arrivalClock','eventClock'])s[k]=number(raw[k],0,48,k);
@@ -110,6 +114,26 @@
     pick(items){let r=this.random()*items.reduce((a,b)=>a+b.weight,0);for(const item of items){r-=item.weight;if(r<0)return item;}return items.at(-1);}
     log(text){this.s.logs.unshift({at:this.s.now,text});this.s.logs=this.s.logs.slice(0,120);}
     money(amount){this.s.money+=amount;if(amount>=0)this.s.totals.income+=amount;else this.s.totals.expense-=amount;}
+    offlineRate(kind){
+      const level=this.s.offlineUpgrades[kind]??0;
+      return OFFLINE_BASE_RATE+UPGRADE_RATE_STEPS.slice(0,level).reduce((sum,increment)=>sum+increment,0);
+    }
+    canUpgradeOffline(kind){
+      if(!['tablet','chair'].includes(kind))return '업그레이드 종류를 확인해주세요.';
+      const level=this.s.offlineUpgrades[kind]??0;
+      if(level>=UPGRADE_COSTS.length)return '최대 단계입니다.';
+      if(this.s.money<UPGRADE_COSTS[level])return '잔액이 부족합니다.';
+      return '';
+    }
+    upgradeOffline(kind){
+      if(this.canUpgradeOffline(kind))return false;
+      const level=this.s.offlineUpgrades[kind];
+      const cost=UPGRADE_COSTS[level];
+      this.money(-cost);
+      this.s.offlineUpgrades[kind]=level+1;
+      this.log((kind==='tablet'?'액정 타블렛':'의자')+' '+(level+1)+'단계 업그레이드 · '+cost.toLocaleString('ko-KR')+'원 지출 / 오프라인 '+(kind==='tablet'?'수익':'EXP')+' '+this.offlineRate(kind)+'%');
+      return true;
+    }
     // A shop purchase consumes the item immediately; there is no inventory yet.
     canPurchaseShopItem(item){
       if(!item||typeof item!=='object'||typeof item.id!=='string'||!/^[a-z][a-z0-9_-]{0,63}$/.test(item.id)
@@ -189,18 +213,29 @@
     triggerEvent(id){const e=EVENTS.find(x=>x.id===id);if(!e)return false;if(e.duration){this.s.buffs=this.s.buffs.filter(b=>b.id!==id);this.s.buffs.push({...e,until:this.s.now+e.duration});this.log(e.name+' · '+e.desc);}else if(id==='fan'){this.s.fatigue=Math.max(0,this.s.fatigue-8);this.log(e.name+' · 피로 8 회복');}else if(id==='repair'){if(this.s.repair==='safe'&&this.s.money>=3000){this.money(-3000);this.log('장비 점검 완료 · 3,000원 지출');}else{this.s.buffs=this.s.buffs.filter(b=>b.id!=='repair-delay');this.s.buffs.push({id:'repair-delay',name:'장비 임시 사용',desc:'점검 대기 중 작업 속도 −15%.',speed:-.15,until:this.s.now+180});this.log('장비 임시 사용 · 3게임시간 속도 −15%');}}else if(!this.s.choices.length){this.s.choices.push({id:'exhibition'});this.log('전시 초대가 도착했습니다. 작업은 계속되고 선택은 기다립니다.');}return true;}
     resolveChoice(join){if(!this.s.choices.length||(join&&this.s.money<5000))return false;if(join){this.money(-5000);this.gainExp(40);this.log('작은 전시 참가 · 5,000원 지출 / 40 EXP');}else this.log('이번 전시는 쉬어갑니다.');this.s.choices=[];return true;}
     grantCollection(applicantID){const a=this.catalog.find(x=>x.id===applicantID);if(!a||!a.works.length){this.log('외주 완료 · 작업물 데이터가 없어 수집 처리를 보류했습니다.');return;}const w=this.pick(a.works),key=a.id+'/'+w.id;if(!this.s.met.includes(a.id))this.s.met.push(a.id);if(this.s.collection.includes(key)){const tip=TIPS[w.tier];this.money(tip);this.s.totals.tips+=tip;this.log('중복 작업물 «'+w.title+'» · '+tip+'원 팁');}else{this.s.collection.push(key);this.log('새 작업물 «'+w.title+'» 도감 등록');}}
-    complete(q){this.s.jobs=this.s.jobs.filter(j=>j!==q);this.s.queueOrder=this.s.queueOrder.filter(id=>id!==q.id);if(this.s.active===q.id)this.s.active=null;this.money(q.gold);this.s.totals.completed++;const mult=1+this.s.buffs.reduce((n,b)=>n+(b.exp||0),0);this.gainExp(Math.floor(q.exp*mult));this.log(q.type+' '+q.scope+' 납품 · '+q.gold+'원');if(q.source==='outsourcing')this.grantCollection(q.applicant);}
+    complete(q,offline=false){
+      this.s.jobs=this.s.jobs.filter(j=>j!==q);
+      this.s.queueOrder=this.s.queueOrder.filter(id=>id!==q.id);
+      if(this.s.active===q.id)this.s.active=null;
+      const gold=offline?Math.floor(q.gold*this.offlineRate('tablet')/100):q.gold;
+      const mult=1+this.s.buffs.reduce((n,b)=>n+(b.exp||0),0);
+      const fullExp=Math.floor(q.exp*mult);
+      const exp=offline?Math.floor(fullExp*this.offlineRate('chair')/100):fullExp;
+      this.money(gold);this.s.totals.completed++;this.gainExp(exp);
+      this.log(q.type+' '+q.scope+' 납품'+(offline?' (오프라인)':'')+' · '+gold+'원 / '+exp+' EXP');
+      if(q.source==='outsourcing')this.grantCollection(q.applicant);
+    }
     arrivals(){if(!this.openTypes().length)return;const chance=this.arrivalChance();if(this.random()*100<chance)this.s.inbox.push(this.createJob());const available=this.catalog.filter(a=>a.works.length&&a.minLevel<=this.s.level&&a.minSkill<=this.stats().skill);if(available.length&&this.random()*100<Math.min(5,.5+(this.s.level-1)*.03+this.stats().skill*.005)){const a=this.pick(available);this.s.inbox.push(this.createJob('outsourcing',a));if(!this.s.met.includes(a.id))this.s.met.push(a.id);this.log(a.name+'의 외주 제안 도착');}}
     checkInbox(){for(const offer of [...this.s.inbox]){offer.inboxWait=(offer.inboxWait??0)+1;if(offer.inboxWait<1440)continue;offer.inboxWait=0;if(this.random()<.25){this.s.inbox=this.s.inbox.filter(j=>j!==offer);this.log(offer.type+' '+offer.scope+' 의뢰 취소 · 도착함에서 24시간 대기 후 신청자가 취소했습니다.');}}}
-    advance(minutes){number(minutes,0,1e6,'진행 시간',true);for(let i=0;i<minutes;i++){
+    advance(minutes,offline=false){number(minutes,0,1e6,'진행 시간',true);if(typeof offline!=='boolean')fail('오프라인 상태를 확인해주세요.');for(let i=0;i<minutes;i++){
       const sleeping=this.s.restUntil>this.s.now;this.chooseNext();const q=this.s.jobs.find(j=>j.id===this.s.active);this.s.now++;
       // Keep each inbox offer's remaining time fixed until it is accepted.
       for(const offer of [...this.s.inbox,...this.s.reservations]){offer.deadline++;offer.expires++;}
       this.checkInbox();
       this.s.buffs=this.s.buffs.filter(b=>b.until>this.s.now);
       if(sleeping){if(this.s.restUntil<=this.s.now){this.s.fatigue=Math.max(0,this.s.fatigue-50);this.log('수면 완료 · 피로 50 회복');}}
-      else if(q){q.done=Math.min(q.work,q.done+this.rate());this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate());if(q.done>=q.work&&this.s.now<=q.deadline)this.complete(q);if(this.s.fatigue>=90)this.rest();}
-      else if(this.s.autoPractice||this.s.practicing){this.s.practiceDone++;this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate()*.5);if(this.s.practiceDone>=PRACTICE.duration){this.s.practiceDone=0;this.s.practicing=false;this.s.totals.practiceSessions++;this.gainExp(PRACTICE.exp);this.log('그림 연습 완료 · 15 EXP');}if(this.s.fatigue>=90)this.rest();}
+      else if(q){q.done=Math.min(q.work,q.done+this.rate());this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate());if(q.done>=q.work&&this.s.now<=q.deadline)this.complete(q,offline);if(this.s.fatigue>=90)this.rest();}
+      else if(this.s.autoPractice||this.s.practicing){this.s.practiceDone++;this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate()*.5);if(this.s.practiceDone>=PRACTICE.duration){this.s.practiceDone=0;this.s.practicing=false;this.s.totals.practiceSessions++;const practiceExp=offline?Math.floor(PRACTICE.exp*this.offlineRate('chair')/100):PRACTICE.exp;this.gainExp(practiceExp);this.log('그림 연습 완료'+(offline?' (오프라인)':'')+' · '+practiceExp+' EXP');}if(this.s.fatigue>=90)this.rest();}
       for(const j of [...this.s.jobs])if(j.deadline<=this.s.now){this.s.jobs=this.s.jobs.filter(k=>k!==j);this.s.queueOrder=this.s.queueOrder.filter(id=>id!==j.id);if(this.s.active===j.id)this.s.active=null;this.s.totals.failed++;this.log(j.type+' '+j.scope+' 마감 초과 · 의뢰 종료');}
       const week=Math.floor(this.s.now/10080);if(week>this.s.lastFoodWeek){const cost=(week-this.s.lastFoodWeek)*350000;this.money(-cost);this.s.lastFoodWeek=week;this.log('주간 식비 '+cost+'원 지출');}
       if(++this.s.arrivalClock>=10){this.s.arrivalClock=0;this.arrivals();}
@@ -210,6 +245,6 @@
     import(raw){const next=[2,VERSION].includes(raw?.version)?validateSave(raw):migrateLegacy(raw);this.s=next;this.log('저장 데이터 불러오기 완료');return true;}
     export(){return copy(this.s);}
   }
-  const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE,JOB_BALANCE,STARTING_MONEY,PROMOTION_COST};
+  const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE,JOB_BALANCE,STARTING_MONEY,PROMOTION_COST,OFFLINE_BASE_RATE,UPGRADE_RATE_STEPS,UPGRADE_COSTS};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudioCore=api;
 })(globalThis);
