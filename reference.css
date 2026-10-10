@@ -150,6 +150,8 @@ html,body{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
  .shop-item-controls button{max-width:100%;white-space:normal;text-align:center}
 }
 
+/* Keep the shared note-drawer hidden outside desktop studio/shop panels. */
+#growth-note[hidden]{display:none!important}
 /* Shop details occupy the existing right note-drawer on desktop. */
 .shop-note{overflow:hidden}
 .shop-note .shop-note-body{padding:0;overflow:auto;display:flex;flex-direction:column}
