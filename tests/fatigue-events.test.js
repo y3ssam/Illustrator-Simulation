@@ -96,8 +96,8 @@ assert.equal(practice.s.restUntil,0);
 
 const {e:legacy}=active(95);
 const saved=legacy.export();
-saved.buffs=[{id:'focus',speed:100,until:saved.now+10000},{id:'mentor',exp:100,until:saved.now+10000},{id:'promotion',arrival:100,until:saved.now+10000}];
-saved.choices=[{id:'exhibition'}];saved.eventClock=47;saved.repair='frugal';
+saved.buffs=[{id:'focus',speed:100,until:saved.now+10000},{id:'mentor',exp:100,until:saved.now+10000},{id:'promotion',arrival:100,until:saved.now+10000},{id:'removed-event',until:'old'}];
+saved.choices=[{id:'exhibition'},{id:'removed-choice'}];saved.eventClock='old';saved.repair='frugal';
 saved.logs=[{at:saved.now,text:'기존 이벤트 기록'}];
 const loaded=new Engine(saved,[]);
 for(const key of ['buffs','choices','eventClock','repair'])assert.equal(Object.hasOwn(loaded.s,key),false,key+' discarded on import');
@@ -110,6 +110,12 @@ assert.equal(loaded.s.exp,20,'legacy EXP buff does not pay out');
 assert.equal(loaded.s.money,110000,'legacy events do not charge or award money');
 const oldWithoutFields=active().e.export();
 assert.doesNotThrow(()=>new Engine(oldWithoutFields,[]));
+const eventFree=new Engine(null,[]);
+eventFree.s.auto=false;eventFree.s.autoAccept=false;eventFree.s.autoPractice=false;
+eventFree.s.closedTypes=Array.from({length:12},(_,i)=>i);
+eventFree.advance(1000);
+assert.deepEqual(eventFree.s.logs,[],'1000 minutes produce no random events');
+assert.equal(Object.hasOwn(eventFree.s,'eventClock'),false);
 
 const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
