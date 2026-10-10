@@ -186,3 +186,12 @@ html,body{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
 @media(max-width:1049px){
  #view[data-page="shop"] .shop-inventory-item{grid-template-columns:42px minmax(0,1fr) auto}
 }
+
+/* On mobile, growth and operations remain directly in the studio's own scroll. */
+@media(max-width:1049px){
+  .studio-inline-note{min-width:0;padding:14px;background:#fffaf1e8;border:1px solid #dfd3bf;border-radius:9px}
+  .studio-inline-note .note-tabs{margin-bottom:12px}
+  .studio-inline-note .note-body{overflow:visible;min-height:0;max-height:none;padding:0;display:block}
+  .studio-inline-note .note-body>*{max-width:100%}
+  .studio-inline-note .skill-notes{min-width:0}
+}
