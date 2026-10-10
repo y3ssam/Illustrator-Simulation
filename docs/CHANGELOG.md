@@ -6,7 +6,7 @@
 - `app.js`, `index.html`: 이벤트 탭·홍보·점검 정책 UI 삭제. PC와 모바일 피로도에 과로 표시, 모바일 현재 작업 아래 피로도 배치, 탭·게임 갱신 중 스크롤 위치 유지.
 - `reference.css`: 1,050px 미만 작업실 순서와 화면 높이, 649px 이하 의뢰 탭·작업·상점 배치, 44px 터치 영역 정리. PC 프레임 비율 유지.
 - `tests/fatigue-events.test.js` 추가, `tests/offline-upgrades.test.js` 갱신, 홍보 테스트를 `tests/starting-money.test.js`로 대체. `AGENTS.md`, `CHATGPT_PROJECT_INSTRUCTIONS.md` 및 프로젝트 기획·상태 문서를 최신 규칙으로 갱신.
-- 로컬 Edge 360/390/430/768/1200px 확인. 공식 Pages 배포 확인 결과는 상태 문서에 추가 기록.
+- 로컬 Edge 360/390/430/768/1200px 및 배포 사이트의 1280px·390px 화면 확인. 배포 결과와 남은 검증 범위는 상태 문서에 기록.
 
 ## 2026-10-11 — 의뢰 썸네일 자동 연결
 - `engine.js`: 신규 의뢰에 타입·구도별 이미지 경로를 한 번 배정해 v3 저장에 포함. 기존 저장의 의뢰는 인덱스 로딩 후 누락된 경우에만 배정.
