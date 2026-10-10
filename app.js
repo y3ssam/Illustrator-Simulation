@@ -10,6 +10,7 @@
  let onboarding=false,holdingControl=false,pendingRender=false,notesOpen=innerWidth>=1050,noteTab='stats',queueTab='waiting',dragJob=null;
  let engine,tab='studio',storageOK=true,pausedOther=false,last=Date.now(),accumulator=0,lastSave=0,away=null,toastTimer;
  let shopItems=[],shopState='loading';
+ let offlineMode=document.hidden,savedAt=null,segments=[],catchUpScheduled=false;
  let token=crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random();
  try{const existing=sessionStorage.getItem(LEASE+'.tab');if(existing)token=existing;else sessionStorage.setItem(LEASE+'.tab',token);}catch{}
  function note(message){const toast=$('toast');toast.textContent=message;toast.hidden=false;if(typeof toast.showPopover==='function'&&!toast.matches(':popover-open'))toast.showPopover();clearTimeout(toastTimer);toastTimer=setTimeout(()=>{if(typeof toast.hidePopover==='function'&&toast.matches(':popover-open'))toast.hidePopover();toast.hidden=true;},5000);}
@@ -17,10 +18,26 @@
 
  function claim(force=false){if(!storageOK)return true;try{const old=JSON.parse(localStorage.getItem(LEASE)||'null');if(!force&&old&&old.token!==token&&old.until>Date.now())return false;localStorage.setItem(LEASE,JSON.stringify({token,until:Date.now()+20000}));return true;}catch{storageOK=false;storageNotice('브라우저 자동 저장을 사용할 수 없어요. 설정에서 파일로 내보내주세요.');return true;}}
  function owns(){if(!storageOK)return true;try{const old=JSON.parse(localStorage.getItem(LEASE)||'null');if(old&&old.token!==token&&old.until>Date.now())return false;return claim();}catch{return claim();}}
- try{const saved=localStorage.getItem(KEY);if(saved){try{const raw=JSON.parse(saved);if(raw.version===2){localStorage.setItem(KEY+'.before-progression-v3',saved);}engine=new StudioCore.Engine(raw,STUDIO_CATALOG);}catch(error){try{localStorage.setItem(KEY+'.recovery',saved);}catch{}engine=new StudioCore.Engine(null,STUDIO_CATALOG);onboarding=true;storageNotice('저장 파일을 읽지 못해 복구 사본을 보관했어요. '+error.message);}}else{engine=new StudioCore.Engine(null,STUDIO_CATALOG);onboarding=true;}}catch{storageOK=false;engine=new StudioCore.Engine(null,STUDIO_CATALOG);onboarding=true;storageNotice('자동 저장을 사용할 수 없어요. 설정에서 파일로 내보내주세요.');}
+ try{const saved=localStorage.getItem(KEY);if(saved){try{const raw=JSON.parse(saved);if(Number.isSafeInteger(raw.savedAt)&&raw.savedAt>0)savedAt=raw.savedAt;if(raw.version===2){localStorage.setItem(KEY+'.before-progression-v3',saved);}engine=new StudioCore.Engine(raw,STUDIO_CATALOG);}catch(error){try{localStorage.setItem(KEY+'.recovery',saved);}catch{}engine=new StudioCore.Engine(null,STUDIO_CATALOG);onboarding=true;storageNotice('저장 파일을 읽지 못해 복구 사본을 보관했어요. '+error.message);}}else{engine=new StudioCore.Engine(null,STUDIO_CATALOG);onboarding=true;}}catch{storageOK=false;engine=new StudioCore.Engine(null,STUDIO_CATALOG);onboarding=true;storageNotice('자동 저장을 사용할 수 없어요. 설정에서 파일로 내보내주세요.');}
  function suspend(){pausedOther=true;$('storage-note').innerHTML='<div class="notice-title"><strong>다른 창에서 운영 중</strong><button class="notice-dismiss" aria-label="다른 창 안내 닫기">×</button></div><p>이 창은 보기만 합니다.</p><button id="takeover">이 창에서 이어하기</button>';$('storage-note').hidden=false;$('welcome-takeover').hidden=false;}
  if(!claim())suspend();
- function save(){if(pausedOther||onboarding)return;try{if(storageOK){localStorage.setItem(KEY,JSON.stringify(engine.export()));$('save-status').textContent='자동 저장됨 · '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});}else $('save-status').textContent='파일 저장 필요';}catch{storageOK=false;storageNotice('자동 저장 공간이 부족해요. 설정에서 파일로 내보내주세요.');}lastSave=Date.now();}
+ if(savedAt!==null&&!onboarding&&!pausedOther){
+   const elapsed=Math.max(0,Date.now()-savedAt);
+   if(elapsed>=GAME_MINUTE_MS){
+     segments.push({ms:elapsed,offline:true});
+     away={money:engine.s.money,...engine.s.totals};
+   }
+ }
+ function pendingMs(){return segments.reduce((sum,entry)=>sum+entry.ms,0);}
+ function enqueueElapsed(ms,offline){
+   if(ms<=0)return;
+   const tail=segments[segments.length-1];
+   if(tail&&tail.offline===offline)tail.ms+=ms;
+   else segments.push({ms,offline});
+ }
+ function offlineUnprocessed(){return segments.some(entry=>entry.offline&&entry.ms>=GAME_MINUTE_MS);}
+
+ function save(){if(pausedOther||onboarding)return;try{if(storageOK){const snapshot=engine.export();snapshot.savedAt=Math.max(0,Math.floor(Date.now()-pendingMs()));localStorage.setItem(KEY,JSON.stringify(snapshot));$('save-status').textContent='자동 저장됨 · '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});}else $('save-status').textContent='파일 저장 필요';}catch{storageOK=false;storageNotice('자동 저장 공간이 부족해요. 설정에서 파일로 내보내주세요.');}lastSave=Date.now();}
  const button=(action,label,disabled=false,extra='')=>`<button data-action="${action}" ${disabled?'disabled':''} ${extra}>${label}</button>`;
  const icons={home:'<path d="m2 10 10-8 10 8 M5 8v14h14V8 M10 22v-8h4v8"/>',book:'<rect x="3" y="2" width="18" height="20" rx="2"/><path d="M7 2v20 M10 7h7 M10 11h7 M10 15h4"/>',pen:'<path d="m7 17 2-6L19 1l4 4-10 10-6 2Z M9 11l4 4 M4 21h16"/>',monitor:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 22h8 M12 17v5"/>',tablet:'<path d="m2 17 15-15 6 6L8 23Z M6 17l2 2 M17 5l3 3"/>',chair:'<path d="M6 12V4a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v8 M4 12h16v5H4Z M12 17v6 M6 23h12"/>',moon:'<path d="M20 15A9 9 0 0 1 9 3a9 9 0 1 0 11 12Z"/>',growth:'<path d="M3 21V13h4v8 M10 21V8h4v13 M17 21V2h4v19"/>',coin:'<ellipse cx="12" cy="6" rx="9" ry="4"/><path d="M3 6v12c0 5 18 5 18 0V6 M3 12c0 5 18 5 18 0"/>',spark:'<path d="m12 1 3 8 8 3-8 3-3 8-3-8-8-3 8-3Z"/>'};
  const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]||icons.pen}</svg>`;
@@ -41,12 +58,34 @@
  return proposals+`<section class="card"><h2>외주 신청자 · 작업물 도감</h2><p class="muted">만나지 않은 신청자와 수집하지 않은 작업물은 ?로 표시됩니다.</p>${engine.catalog.map(a=>{const met=s.met.includes(a.id),count=a.works.filter(w=>s.collection.includes(a.id+'/'+w.id)).length;return `<section style="margin-top:20px"><h3>${met?esc(a.name):'?'} <span class="muted">${count}/${a.works.length}</span></h3>${met&&a.image?`<img src="${esc(a.image)}" alt="${esc(a.name)}" referrerpolicy="no-referrer" style="width:72px;height:72px;object-fit:contain">`:''}<div class="collection-grid">${a.works.map(w=>{const known=s.collection.includes(a.id+'/'+w.id);return `<article class="collect-card">${known&&w.image?`<img src="${esc(w.image)}" alt="${esc(w.title)}" referrerpolicy="no-referrer">`:'<div class="unknown">?</div>'}<strong>${known?esc(w.title):'미발견 작업물'}</strong>${known?`<p class="muted">${({common:'일반',uncommon:'고급',rare:'희귀',legendary:'전설'})[w.tier]} · 중복 팁 ${won(StudioCore.TIPS[w.tier])}</p>`:''}</article>`;}).join('')}</div></section>`;}).join('')}</section>`;
  }
  function shop(){
-   const s=engine.s;
-   const heading='<div class="section-head"><h2>상점</h2><span class="muted">피로도 '+Number(s.fatigue.toFixed(1))+' / 100</span></div>';
-   if(shopState==='loading')return '<section class="shop-page">'+heading+'<p class="muted">아이템 불러오는 중…</p></section>';
-   if(shopState==='error')return '<section class="shop-page">'+heading+'<p class="risk">상점 아이템을 불러오지 못했습니다.</p>'+button('shop-reload','다시 시도')+'</section>';
-   if(!shopItems.length)return '<section class="shop-page">'+heading+'<p class="muted">등록된 아이템이 없습니다.</p></section>';
-   return '<section class="shop-page">'+heading+'<div class="shop-list">'+shopItems.map(item=>{
+   const state=engine.s;
+   const heading='<div class="section-head"><h2>상점</h2><span class="muted">피로도 '+Number(state.fatigue.toFixed(1))+' / 100</span></div>';
+   const upgrades=[
+     {id:'tablet',name:'액정 타블렛',icon:'assets/shop/pen-tablet.png',effect:'오프라인 보상금'},
+     {id:'chair',name:'의자',icon:'assets/shop/chair.png',effect:'오프라인 EXP'}
+   ];
+   const upgradeMarkup='<div class="section-head shop-subheading"><h3>오프라인 업그레이드</h3></div><div class="shop-list">'
+     +upgrades.map(item=>{
+       const level=state.offlineUpgrades[item.id];
+       const rate=engine.offlineRate(item.id);
+       const maxLevel=level===StudioCore.UPGRADE_COSTS.length;
+       const cost=maxLevel?null:StudioCore.UPGRADE_COSTS[level];
+       const nextRate=maxLevel?rate:rate+StudioCore.UPGRADE_RATE_STEPS[level];
+       const reason=engine.canUpgradeOffline(item.id);
+       const label=maxLevel?'최대 단계':won(cost)+' · 강화';
+       return '<article class="shop-item">'
+         +'<img class="shop-item-icon" src="'+esc(item.icon)+'" alt="">'
+         +'<div class="shop-item-detail"><strong>'+esc(item.name)+' · Lv.'+level+'/5</strong>'
+         +'<small>'+esc(item.effect)+' '+rate+'%'+(maxLevel?'':' → '+nextRate+'%')+'</small></div>'
+         +'<div class="shop-item-controls">'
+         +button('upgrade-offline:'+item.id,label,!!reason,reason?'title="'+esc(reason)+'"':'')
+         +'</div></article>';
+     }).join('')+'</div>';
+   let itemMarkup='';
+   if(shopState==='loading')itemMarkup='<p class="muted">아이템 불러오는 중…</p>';
+   else if(shopState==='error')itemMarkup='<p class="risk">상점 아이템을 불러오지 못했습니다.</p>'+button('shop-reload','다시 시도');
+   else if(!shopItems.length)itemMarkup='<p class="muted">등록된 아이템이 없습니다.</p>';
+   else itemMarkup='<div class="shop-list">'+shopItems.map(item=>{
      const effect=item.effect;
      const supported=effect.type==='fatigue_change'&&Number.isInteger(effect.amount)&&effect.amount<0&&effect.amount>=-100;
      const desc=supported?'피로도 '+effect.amount+' · 구매 즉시 사용':'아직 사용할 수 없는 효과';
@@ -56,7 +95,8 @@
        +'<div class="shop-item-controls"><strong>'+won(item.price)+'</strong>'
        +button('buy-shop:'+item.id,'구매·사용',!!reason,reason?'title="'+esc(reason)+'"':'')
        +'</div></article>';
-   }).join('')+'</div></section>';
+   }).join('')+'</div>';
+   return '<section class="shop-page">'+heading+itemMarkup+upgradeMarkup+'</section>';
  }
  async function loadShopItems(){
    shopState='loading';
@@ -85,13 +125,45 @@
  }
  function render(){if(holdingControl){pendingRender=true;return;}pendingRender=false;const oldTimeline=$('view').querySelector('.timeline')?.scrollLeft||0,scrolls=[...$('view').querySelectorAll('.job-list')].map(el=>el.scrollTop),focus=document.activeElement,action=focus?.dataset?.action,noteFocus=focus?.dataset?.note,group=focus?.closest('#growth-note')?'note':focus?.closest('.job')?'job':focus?.closest('.timeline')?'timeline':'other';const s=engine.s;document.title=onboarding?'작업실 게임':s.name+'의 작업실';$('bar-name').textContent=s.name+'의 작업실';$('metrics').innerHTML=`<div class="bar-money">${icon('coin')} <strong>${won(s.money)}</strong></div>`;$('view').dataset.page=tab;let content;if(tab==='studio')content=studio();else if(tab==='tasks')content='<div class="studio-content task-content"><div class="studio-utility-bar"><button data-action="back-studio">← 작업실</button></div>'+timeline()+board()+'</div>';else if(tab==='collection')content='<div class="studio-content"><div class="studio-utility-bar"><button data-action="back-studio">← 작업실</button></div>'+collection()+'</div>';else if(tab==='shop')content=shop();else if(['home','gacha'].includes(tab)){const name={home:'집',gacha:'가챠'}[tab];content=`<section class="placeholder-page"><h2>${name}</h2><p class="muted">준비 중</p></section>`;}else content=`<section class="journal"><div class="section-head"><h2>작업실의 기록</h2><span class="muted">납품 ${s.totals.completed} · 실패 ${s.totals.failed}</span></div><p class="muted">수입 ${won(s.totals.income)} · 지출 ${won(s.totals.expense)} · 팁 ${won(s.totals.tips)}</p>${logs(120)}</section>`;$('view').innerHTML=content;renderNote();const rail=$('view').querySelector('.timeline');if(rail)rail.scrollLeft=oldTimeline;$('view').querySelectorAll('.job-list').forEach((el,i)=>el.scrollTop=scrolls[i]||0);if(focus?.id==='level-info')$('level-info')?.focus({preventScroll:true});if(focus?.id?.endsWith('-job-list')||focus?.id?.endsWith('-box-help'))$(focus.id)?.focus({preventScroll:true});if(action){const area=group==='note'?$('growth-note'):$('view');const candidates=[...area.querySelectorAll('[data-action]')].filter(el=>el.dataset.action===action);const target=candidates.find(el=>group==='job'?el.closest('.job'):group==='timeline'?el.closest('.timeline'):!el.closest('.job')&&!el.closest('.timeline'))||candidates[0];target?.focus({preventScroll:true});}if(noteFocus)$('growth-note').querySelector(`[data-note="${noteFocus}"]`)?.focus({preventScroll:true});if(pausedOther){$('view').querySelectorAll('button').forEach(el=>el.disabled=true);$('growth-note').querySelectorAll('[data-action]:not([data-action="note-close"])').forEach(el=>el.disabled=true);}
  }
- function updateReport(){if(!away||document.hidden)return;const t=engine.s.totals;$('return-report').innerHTML=`<div class="row between"><strong>${accumulator>=GAME_MINUTE_MS?'밀린 시간 처리 중…':'돌아온 동안의 작업실 기록'}</strong><button id="report-close">닫기</button></div><p>납품 ${t.completed-away.completed}건 · 실패 ${t.failed-away.failed}건 · 수입 ${won(t.income-away.income)} · 지출 ${won(t.expense-away.expense)} · 잔액 변화 ${won(engine.s.money-away.money)}</p>`;$('return-report').hidden=false;$('report-close').onclick=()=>{away=null;$('return-report').hidden=true;};if(accumulator<GAME_MINUTE_MS)away=null;}
- function tick(){const now=Date.now();if(onboarding){last=now;owns();return;}if(pausedOther){last=now;return;}if(!owns()){suspend();last=now;render();return;}accumulator+=Math.max(0,now-last);last=now;const n=Math.min(240,Math.floor(accumulator/GAME_MINUTE_MS));if(n){engine.advance(n);accumulator-=n*GAME_MINUTE_MS;render();}if(now-lastSave>=5000)save();updateReport();}
+ function updateReport(){if(!away||document.hidden)return;const t=engine.s.totals;$('return-report').innerHTML=`<div class="row between"><strong>${pendingMs()>=GAME_MINUTE_MS?'오프라인 정산 중…':'오프라인 진행 결과'}</strong><button id="report-close">닫기</button></div><p>납품 ${t.completed-away.completed}건 · 실패 ${t.failed-away.failed}건 · 수입 ${won(t.income-away.income)} · 지출 ${won(t.expense-away.expense)} · 잔액 변화 ${won(engine.s.money-away.money)}</p>`;$('return-report').hidden=false;$('report-close').onclick=()=>{away=null;$('return-report').hidden=true;};if(pendingMs()<GAME_MINUTE_MS)away=null;}
+ function tick(){
+  const now=Date.now();
+  if(onboarding){last=now;owns();return;}
+  if(pausedOther){last=now;return;}
+  if(!owns()){suspend();last=now;render();return;}
+  enqueueElapsed(Math.max(0,now-last),offlineMode);last=now;
+  let remaining=2400,processed=0;
+  while(segments.length&&remaining>0){
+    const first=segments[0],minutes=Math.min(remaining,Math.floor(first.ms/GAME_MINUTE_MS));
+    if(minutes<1){
+      // Carry subsecond leftovers across visibility boundaries without losing elapsed time.
+      if(segments.length>1){segments[1].ms+=first.ms;segments.shift();continue;}
+      break;
+    }
+    engine.advance(minutes,first.offline);
+    first.ms-=minutes*GAME_MINUTE_MS;
+    remaining-=minutes;processed+=minutes;
+    if(first.ms<=0)segments.shift();
+  }
+  if(processed)render();
+  if(now-lastSave>=5000)save();
+  updateReport();
+  if(pendingMs()>=GAME_MINUTE_MS&&!document.hidden&&!catchUpScheduled){
+    catchUpScheduled=true;
+    setTimeout(()=>{catchUpScheduled=false;tick();},0);
+  }
+}
  function releaseControl(){holdingControl=false;if(pendingRender)setTimeout(()=>{if(!holdingControl&&pendingRender)render();},0);}
  document.addEventListener('pointerdown',e=>{if(e.target.closest('#view button,#growth-note button,#view .job-list'))holdingControl=true;},true);
  document.addEventListener('pointerup',releaseControl,true);document.addEventListener('pointercancel',releaseControl,true);addEventListener('blur',releaseControl);
  document.addEventListener('keydown',e=>{if([' ','Enter'].includes(e.key)&&e.target.closest('#view button,#growth-note button'))holdingControl=true;},true);document.addEventListener('keyup',releaseControl,true);
- document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.note){noteTab=b.dataset.note;renderNote();$('growth-note').querySelector(`[data-note="${noteTab}"]`)?.focus({preventScroll:true});return;}if(b.dataset.queue){queueTab=b.dataset.queue;render();return;}if(b.dataset.tab){tab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(el=>el.setAttribute('aria-pressed',String(el===b)));render();$('view').scrollTop=0;return;}if(!b.dataset.action)return;const [a,id]=b.dataset.action.split(':');if(a==='open-notes'){toggleNotes();return;}if(a==='open-collection'){tab='collection';render();$('view').scrollTop=0;return;}if(a==='back-studio'){tab='studio';render();$('view').scrollTop=0;return;}if(a==='note-close'){toggleNotes(false);return;}if(a==='shop-reload'){loadShopItems();return;}if(a==='show-tasks'){tab='tasks';render();$('view').scrollTop=0;return;}if(a==='inbox-sheet'){queueTab='inbox';if(innerWidth<650){showInbox();return;}render();$('job-board')?.scrollIntoView({behavior:'smooth',block:'center'});return;}if(pausedOther){note('다른 창에서 운영 중입니다.');return;}tick();let ok=true;switch(a){case 'focus-jobs':queueTab='waiting';render();$('job-board')?.scrollIntoView({behavior:'smooth',block:'center'});return;case 'work-start':{const next=engine.orderedJobs()[0];ok=next?engine.select(next.id):engine.startPractice();break;}case 'practice':ok=engine.startPractice();break;case 'practice-auto':engine.togglePractice();break;case 'auto':engine.toggleAuto();break;case 'accept-auto':engine.toggleAccept();break;case 'pause':engine.pause();break;case 'rest':ok=engine.rest();break;case 'accept':ok=engine.accept(id);engine.chooseNext();break;case 'reserve':ok=engine.reserve(id);break;case 'select':ok=engine.select(id);break;case 'up':case 'down':{const rows=engine.orderedJobs().filter(q=>q.id!==engine.s.active),index=rows.findIndex(q=>q.id===id);if(a==='up')ok=index>0&&engine.reorder(id,rows[index-1].id);else ok=index>=0&&index<rows.length-1&&engine.reorder(id,rows[index+2]?.id);break;}case 'type':ok=engine.toggleType(Number(id));break;case 'stat':ok=engine.addStat(id);break;case 'promotion':ok=engine.promotion();break;case 'lotto':{const prize=engine.lotto();ok=prize!==null;if(ok)note('복권 결과 · '+won(prize));break;}case 'choice':ok=engine.resolveChoice(id==='join');break;case 'buy-shop':{
+ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.note){noteTab=b.dataset.note;renderNote();$('growth-note').querySelector(`[data-note="${noteTab}"]`)?.focus({preventScroll:true});return;}if(b.dataset.queue){queueTab=b.dataset.queue;render();return;}if(b.dataset.tab){tab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(el=>el.setAttribute('aria-pressed',String(el===b)));render();$('view').scrollTop=0;return;}if(!b.dataset.action)return;const [a,id]=b.dataset.action.split(':');if(a==='open-notes'){toggleNotes();return;}if(a==='open-collection'){tab='collection';render();$('view').scrollTop=0;return;}if(a==='back-studio'){tab='studio';render();$('view').scrollTop=0;return;}if(a==='note-close'){toggleNotes(false);return;}if(a==='shop-reload'){loadShopItems();return;}if(a==='show-tasks'){tab='tasks';render();$('view').scrollTop=0;return;}if(a==='inbox-sheet'){queueTab='inbox';if(innerWidth<650){showInbox();return;}render();$('job-board')?.scrollIntoView({behavior:'smooth',block:'center'});return;}if(pausedOther){note('다른 창에서 운영 중입니다.');return;}if(offlineUnprocessed()){note('오프라인 정산 중입니다.');return;}tick();if(offlineUnprocessed()){note('오프라인 정산 중입니다.');return;}let ok=true;switch(a){case 'focus-jobs':queueTab='waiting';render();$('job-board')?.scrollIntoView({behavior:'smooth',block:'center'});return;case 'work-start':{const next=engine.orderedJobs()[0];ok=next?engine.select(next.id):engine.startPractice();break;}case 'practice':ok=engine.startPractice();break;case 'practice-auto':engine.togglePractice();break;case 'auto':engine.toggleAuto();break;case 'accept-auto':engine.toggleAccept();break;case 'pause':engine.pause();break;case 'rest':ok=engine.rest();break;case 'accept':ok=engine.accept(id);engine.chooseNext();break;case 'reserve':ok=engine.reserve(id);break;case 'select':ok=engine.select(id);break;case 'up':case 'down':{const rows=engine.orderedJobs().filter(q=>q.id!==engine.s.active),index=rows.findIndex(q=>q.id===id);if(a==='up')ok=index>0&&engine.reorder(id,rows[index-1].id);else ok=index>=0&&index<rows.length-1&&engine.reorder(id,rows[index+2]?.id);break;}case 'type':ok=engine.toggleType(Number(id));break;case 'stat':ok=engine.addStat(id);break;case 'promotion':ok=engine.promotion();break;case 'lotto':{const prize=engine.lotto();ok=prize!==null;if(ok)note('복권 결과 · '+won(prize));break;}case 'choice':ok=engine.resolveChoice(id==='join');break;case 'upgrade-offline':{
+   const reason=engine.canUpgradeOffline(id);
+   if(reason){note(reason);render();return;}
+   ok=engine.upgradeOffline(id);
+   if(ok)note((id==='tablet'?'액정 타블렛':'의자')+' Lv.'+engine.s.offlineUpgrades[id]+' · 오프라인 '+(id==='tablet'?'수익':'EXP')+' '+engine.offlineRate(id)+'%');
+   break;
+ }case 'buy-shop':{
    const item=shopItems.find(entry=>entry.id===id);
    const reason=engine.canPurchaseShopItem(item);
    if(reason){note(reason);render();return;}
@@ -113,17 +185,17 @@
  $('repair').onchange=()=>{if(pausedOther)return;engine.s.repair=$('repair').value;save();};
  $('export').onclick=()=>{tick();const blob=new Blob([JSON.stringify(engine.export(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='작업실-저장.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);};
  $('import').onclick=()=>{if(pausedOther)return note('이 창은 보기 전용입니다.');$('import-file').click();};
- $('import-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>10*1024*1024)throw new Error('10MB 이하 파일을 사용해주세요.');const parsed=JSON.parse(await f.text());if(pausedOther)throw new Error('다른 창에서 운영 중입니다.');const old=engine.export();engine.import(parsed);try{if(storageOK){localStorage.setItem(KEY+'.before-import',JSON.stringify(old));if(parsed.version!==StudioCore.VERSION)localStorage.setItem(KEY+'.before-progression-import-v3',JSON.stringify(parsed));}}catch{}onboarding=false;$('welcome').close();last=Date.now();accumulator=0;save();render();note('저장을 불러왔습니다.');}catch(error){if(onboarding)$('welcome-error').textContent='불러오기 실패 · '+error.message;else note('불러오기 실패 · '+error.message);}e.target.value='';};
+ $('import-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>10*1024*1024)throw new Error('10MB 이하 파일을 사용해주세요.');const parsed=JSON.parse(await f.text());if(pausedOther)throw new Error('다른 창에서 운영 중입니다.');const old=engine.export();engine.import(parsed);try{if(storageOK){localStorage.setItem(KEY+'.before-import',JSON.stringify(old));if(parsed.version!==StudioCore.VERSION)localStorage.setItem(KEY+'.before-progression-import-v3',JSON.stringify(parsed));}}catch{}onboarding=false;$('welcome').close();last=Date.now();accumulator=0;segments=[];away=null;save();render();note('저장을 불러왔습니다.');}catch(error){if(onboarding)$('welcome-error').textContent='불러오기 실패 · '+error.message;else note('불러오기 실패 · '+error.message);}e.target.value='';};
  $('reset').onclick=()=>{if(pausedOther)return note('이 창은 보기 전용입니다.');if($('reset-confirm').value!=='새로 시작')return note('확인 문구를 입력해주세요.');onboarding=true;$('welcome-name').value='';$('welcome-error').textContent='';accumulator=0;last=Date.now();$('reset-confirm').value='';$('settings').close();$('welcome').showModal();render();};
  function takeover(){try{const raw=localStorage.getItem(KEY);if(raw){engine.import(JSON.parse(raw));onboarding=false;$('welcome').close();}claim(true);pausedOther=false;last=Date.now();accumulator=0;$('storage-note').hidden=true;$('welcome-takeover').hidden=true;render();save();}catch(error){if(onboarding)$('welcome-error').textContent=error.message;else note(error.message);}}
  $('storage-note').onclick=e=>{if(e.target.closest('.notice-dismiss'))$('storage-note').hidden=true;else if(e.target.id==='takeover')takeover();};
  $('welcome-takeover').onclick=takeover;$('settings-takeover').onclick=()=>{takeover();$('readonly-setting').hidden=!pausedOther;};
  document.addEventListener('error',e=>{if(e.target.tagName==='IMG'){const p=document.createElement('div');p.className='unknown';p.textContent='이미지 연결 확인';p.style.fontSize='13px';e.target.replaceWith(p);}},true);
- document.addEventListener('visibilitychange',()=>{if(document.hidden){tick();away={money:engine.s.money,...engine.s.totals};save();}else{tick();updateReport();}});
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){tick();offlineMode=true;away={money:engine.s.money,...engine.s.totals};save();}else{tick();offlineMode=false;updateReport();}});
  addEventListener('pagehide',()=>{tick();save();try{const lease=JSON.parse(localStorage.getItem(LEASE)||'null');if(lease?.token===token)localStorage.removeItem(LEASE);}catch{}});
  addEventListener('storage',e=>{if(e.key!==LEASE||!e.newValue)return;try{const other=JSON.parse(e.newValue);if(other.token!==token&&other.until>Date.now()){suspend();render();}}catch{}});
  $('welcome').addEventListener('cancel',e=>e.preventDefault());
- $('welcome-form').onsubmit=e=>{e.preventDefault();if(pausedOther||!owns()){$('welcome-error').textContent='다른 창에서 운영 중입니다. 이 창에서 이어하기를 먼저 눌러주세요.';return;}const name=$('welcome-name').value.trim();if(!name){$('welcome-error').textContent='이름을 입력해주세요.';return;}engine.startFresh(name);onboarding=false;last=Date.now();accumulator=0;$('welcome').close();save();render();};
+ $('welcome-form').onsubmit=e=>{e.preventDefault();if(pausedOther||!owns()){$('welcome-error').textContent='다른 창에서 운영 중입니다. 이 창에서 이어하기를 먼저 눌러주세요.';return;}const name=$('welcome-name').value.trim();if(!name){$('welcome-error').textContent='이름을 입력해주세요.';return;}engine.startFresh(name);onboarding=false;last=Date.now();accumulator=0;segments=[];away=null;$('welcome').close();save();render();};
  $('welcome-import').onclick=()=>{if(pausedOther){$('welcome-error').textContent='다른 창에서 운영 중입니다.';return;}$('import-file').click();};
  document.querySelectorAll('[data-tab] .nav-icon').forEach(el=>{const page=el.parentElement.dataset.tab;el.innerHTML=icon(({studio:'monitor',home:'home',shop:'coin',gacha:'spark',journal:'book'})[page]);});
  loadShopItems();render();if(onboarding){$('save-status').textContent='이름을 입력하면 시작해요';$('welcome').showModal();}else save();setInterval(tick,500);
