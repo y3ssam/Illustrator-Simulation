@@ -266,6 +266,8 @@ html,body{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
 .work-thumb{position:relative;overflow:hidden}
 .work-thumb>img{filter:blur(.8px) saturate(.85)}
 .work-thumb:has(>img)::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(to top,rgba(255,255,255,.98) 0%,rgba(255,255,255,0) 33.333%)}
+.work-panel > .work-thumb{box-shadow:0 0 0 1px #b4a58b,0 0 0 4px #e7ddc9,0 0 0 5px #b4a58b}
+.job .work-thumb{box-shadow:0 0 0 1px #cdbfa9,0 3px 7px rgba(69,53,32,.14)}
 @media(min-width:1050px){
  .shop-list{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
  .shop-item{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:32px 32px;column-gap:7px;row-gap:5px;align-items:center;padding:7px;min-height:86px;max-height:88px;overflow:hidden}
