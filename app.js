@@ -54,14 +54,15 @@
  function renderNote(){
    const desktop=innerWidth>=1050,mobile=!desktop;
    if(desktop)notesOpen=true;
-   const note=$('growth-note'),oldScroll=note.querySelector('.note-body')?.scrollTop||0;
+   const note=$('growth-note'),oldScroll=note.querySelector('.note-body')?.scrollTop||0,wasShop=note.classList.contains('shop-note');
    const studioPanel=['studio','collection'].includes(tab);
    const shopPanel=tab==='shop'&&desktop&&!onboarding;
    note.classList.toggle('shop-note',shopPanel);
    note.hidden=shopPanel?false:!notesOpen||onboarding||!studioPanel;
    note.innerHTML=shopPanel?'<div class="note-body shop-note-body">'+shopSidebar()+'</div>':growthNote();
    const body=note.querySelector('.note-body');
-   if(body)body.scrollTop=oldScroll;
+   if(body)body.scrollTop=shopPanel===wasShop?oldScroll:0;
+   note.setAttribute('aria-label',shopPanel?'상점 정보':'성장 노트');
    $('note-backdrop').hidden=!notesOpen||!mobile||onboarding||!studioPanel;
    document.querySelector('.game-frame').classList.toggle('notes-open',shopPanel||(notesOpen&&!mobile&&!onboarding&&studioPanel));
    const blocked=notesOpen&&mobile&&!onboarding&&studioPanel;
