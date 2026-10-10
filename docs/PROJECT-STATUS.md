@@ -3,46 +3,37 @@
 **기준 날짜: 2026-10-10 (KST)**  
 **공식 저장소: https://github.com/y3ssam/Illustrator-Simulation**
 
-## 이번 작업
-- [x] GitHub 초기 저장소를 만들고 제공된 HTML/CSS/JS 소스 7개 등록
-- [x] 메뉴 순서를 작업실, 집, 상점, 가챠, 기록으로 정리
-- [x] 집·상점·가챠는 비용 차감 없는 임시 화면으로 연결
-- [x] 기존 의뢰함·도감, 성장·운영 기능을 작업실 내부에서 접근하도록 유지
-- [x] ChatGPT 프로젝트용 지침과 개발 에이전트 지침 저장
-- [x] 게임 기획 및 변경 현황 문서 등록
-- [x] 5개 탭 순서·내부 버튼·저장 키 정적 확인 및 app.js / engine.js JavaScript 구문 검사
-- [x] `tests/navigation.test.js` 회귀 점검 스크립트 추가 (Node에서 직접 실행은 별도 확인 필요)
-- [ ] 실제 PC/모바일 브라우저에서 시각·조작 테스트
-- [ ] 집·상점·가챠의 구체적인 콘텐츠·구매·확률 설계
-- [ ] 재화 소비 기능 및 게임 엔진/저장 포맷 수정
-- [ ] 이번 제공본에 빠져 있는 이미지와 폰트 에셋 등록
+## 완료
+- [x] 메뉴: 작업실, 집, 상점, 가챠, 기록 / 기존 의뢰·성장·운영 접근 유지
+- [x] 초기 HTML·CSS·JavaScript 및 개발 문서 GitHub 등록
+- [x] 사용자 업로드한 작업실 배경, 썸네일, Pretendard 폰트와 라이선스 파일 GitHub 존재 확인
+- [x] 사용자 제공 탄산음료 아이콘 `assets/shop/soft-drink-red.png` GitHub 등록
+- [x] 상점 아이템 제작용 독립 페이지 (`tools/shop-editor.html`, `.css`, `.js`)
+- [x] JSON 시드 데이터 등록 (`data/shop-items.json`): 탄산음료 / 2,200원 / 피로도 -10
+- [x] 편집기: 아이템 생성·수정·삭제, 효과 종류, 아이콘 경로/로컬 이미지 미리보기, 저장된 목록 JSON 가져오기·내보내기, 브라우저 로컬 임시 저장
+- [x] 제거한 장비 업그레이드 이미지·화면의 잔여 CSS 정리(기존 엔진 저장 호환 코드는 보존)
+- [x] 편집기 JS 구문 검사 및 아이템 데이터·이미지 경로 정적 확인
+- [x] `tests/shop-item-data.test.js` 자동 검사 스크립트 추가
 
-## 소스 역할
-- `index.html`: 앱 구조, 5개 메인 메뉴
-- `app.js`: 렌더링, 탭/성장 노트/의뢰 UI 이벤트
-- `engine.js`: 게임 상태와 저장 검증·마이그레이션 (v3)
-- `catalog.js`: 외주 신청자·작업물 데이터 (현재 빈 배열)
-- `style.css` / `reference.css`: 현재 HTML에 연결된 CSS
-- `cozy.css`: 현재 HTML에서 미연결된 스타일 참고 파일
+## 미완료 / 향후 결정
+- [ ] 사용자 브라우저에서 PC/모바일 실제 화면 및 조작 검증
+- [ ] `node tests/shop-item-data.test.js`와 기존 회귀 테스트 실제 실행 확인
+- [ ] 게임 상점의 구매·소비·아이템 보관·효과 적용 및 세이브 구조 결정
+- [ ] 시간제 버프 및 디버프 해제 아이템의 구체적인 엔진 적용 정책 결정
+- [ ] 가챠 굿즈 시리즈·외주 작업자 시리즈 제작 툴은 미착수
 
-## 확인이 필요한 에셋
-현재 CSS에서 참조하지만 사용자 제공 파일에 포함되지 않은 경로:
-- `assets/01-desk.webp`
-- `assets/02-work-thumbnails.webp`
-- `assets/03-equipment.webp`
-- `assets/fonts/PretendardVariable.woff2`
+## 기존 동작을 유지한 부분
+- `engine.js` 저장 버전 3 / 저장 키 `studio.workbench.v2`
+- 구버전 장비 강화비 환급 등 세이브 마이그레이션
+- 별도 장비 점검 이벤트 및 설정은 기존대로 유지 (장비 업그레이드는 폐기됨)
+- 의뢰 관리·도감·성장·자동화 및 기록
 
-이 에셋이 없더라도 JavaScript 코드 등록과 탭 이동은 별개이며, 원래 배경/폰트의 완전한 복원은 해당 원본 확보 후 진행한다.
+## 현재 이미지 경로
+- 현재 게임 참조: `assets/01-desk.webp`, `assets/02-work-thumbnails.webp`
+- 현재 폰트: `assets/fonts/PretendardVariable.woff2` (`OFL.txt` 포함)
+- 참고 스타일 자산: `assets/cozy-studio-web.webp`
+- 개발 도구 아이콘: `assets/shop/soft-drink-red.png`
+- 폐기한 장비 업그레이드 이미지는 필요 없음: `assets/03-equipment.webp`
 
-## 저장 데이터 유의사항
-- 브라우저 저장 키 `studio.workbench.v2`, 게임 엔진 포맷 v3를 유지한다.
-- 기존 JSON 가져오기 및 원본 게임 데이터 이전 코드를 임의로 삭제하지 않는다.
-- 플레이어의 실제 세이브 파일은 소스 저장소에 자동 업로드하지 않는다.
-
-## 2026-10-10 추가 확인: 에셋 업로드
-- [x] 사용자 제공 `assets.zip` 무결성 확인: 총 10개 파일(이미지 8개, 폰트 1개, 라이선스 1개), ZIP 내부 파일 검사 통과
-- [x] GitHub에 `assets/` 및 `assets/fonts/` 디렉터리 경로 준비(`.gitkeep`)
-- [ ] 원본 이미지 및 폰트 GitHub 업로드 (연결된 GitHub 파일 작성 기능은 UTF-8 텍스트 업로드만 지원하며 ZIP 내 바이너리를 직접 업로드하지 못함)
-- [ ] 업로드 후 CSS 이미지 3개 및 참고 CSS 이미지 1개, 폰트 로드 확인
-
-원본 ZIP은 최상위에 이미지들과 `fonts/` 하위 파일이 있으므로, GitHub에는 이 파일들을 **`assets/` 아래에 배치**해야 CSS의 기존 경로와 일치한다. 현재 GitHub의 `.gitkeep` 파일은 빈 폴더 유지를 위한 파일일 뿐 이미지/폰트가 반영된 것이 아니다.
+## 편집기 이용
+`tools/shop-editor.html`을 프로젝트 로컬 웹서버에서 열거나, 별도로 GitHub Pages가 활성화된 경우 해당 경로에서 연다. 편집 결과는 브라우저 로컬에 임시 저장된다. **JSON 내보내기 → 데이터 파일 GitHub 반영**, 아이콘은 **원본 이미지 GitHub 등록**이 필요하다. 자동 저장은 게임 플레이 저장과 별도 키를 사용하며 게임 상태를 변경하지 않는다.
