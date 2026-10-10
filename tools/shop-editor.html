@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>상점 아이템 편집기 · 어쩌구 키우기</title>
+  <link rel="stylesheet" href="shop-editor.css">
+  <script src="shop-editor.js" defer></script>
+</head>
+<body>
+  <div class="tool-shell">
+    <header class="toolbar">
+      <div><h1>상점 아이템 편집기</h1><p>아이템 데이터 관리</p></div>
+      <div class="toolbar-actions">
+        <a class="button" href="../index.html">게임</a>
+        <button type="button" id="import-button">JSON 가져오기</button>
+        <button type="button" id="export-button" class="primary">JSON 내보내기</button>
+        <input type="file" id="import-file" accept=".json,application/json" hidden>
+      </div>
+    </header>
+    <main class="layout">
+      <aside class="items-panel" aria-label="등록된 상점 아이템">
+        <div class="heading"><h2>아이템 <span id="item-count">0</span></h2><button id="add-button" type="button">+ 추가</button></div>
+        <div id="item-list" class="item-list" role="list"></div>
+      </aside>
+      <section class="editor-panel" aria-label="아이템 정보 편집">
+        <div class="heading"><h2>아이템 설정</h2><button id="delete-button" type="button" class="danger">삭제</button></div>
+        <form id="item-form" autocomplete="off">
+          <div class="field-grid">
+            <label>아이템 ID <input name="id" required maxlength="64" pattern="[a-z][a-z0-9_-]*" placeholder="item-id"></label>
+            <label>이름 <input name="name" required maxlength="80" placeholder="아이템 이름"></label>
+            <label>가격 (원) <input name="price" required type="number" min="0" max="1000000000" step="1"></label>
+            <label>아이콘 경로 <input name="icon" placeholder="assets/shop/item.png"></label>
+          </div>
+          <div class="icon-input-row">
+            <label for="icon-file" class="file-label">아이콘 이미지 선택</label>
+            <input id="icon-file" type="file" accept="image/png,image/webp">
+            <span id="icon-file-name"></span>
+          </div>
+          <fieldset class="effects">
+            <legend>사용 효과</legend>
+            <label>효과 종류
+              <select name="effectType" id="effect-type">
+                <option value="fatigue_change">피로도 변화 (즉시)</option>
+                <option value="timed_buff">시간제 버프</option>
+                <option value="remove_debuff">디버프 해제</option>
+              </select>
+            </label>
+            <div id="effect-fields"></div>
+          </fieldset>
+          <div class="form-actions"><span id="form-feedback" role="status" aria-live="polite"></span><button class="primary" type="submit">아이템 저장</button></div>
+        </form>
+      </section>
+      <aside class="preview-panel" aria-label="상점 미리보기">
+        <h2>미리보기</h2>
+        <div class="preview-item">
+          <div class="preview-icon"><img id="preview-image" alt="" hidden><span id="missing-icon">이미지 없음</span></div>
+          <div class="preview-copy"><strong id="preview-name">아이템</strong><span id="preview-effect"></span><b id="preview-price">0원</b></div>
+        </div>
+        <div class="file-note" id="icon-note">이미지 파일은 JSON과 별도로 GitHub의 assets/shop/에 등록해야 합니다.</div>
+      </aside>
+    </main>
+    <footer class="tool-footer">
+      <button id="reset-button" type="button">기본 데이터로 초기화</button>
+      <span id="save-state" role="status" aria-live="polite"></span>
+    </footer>
+  </div>
+</body>
+</html>
