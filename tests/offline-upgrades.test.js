@@ -81,9 +81,12 @@ assert.equal(food.s.totals.expense,175000);
 const sleep=new Engine(null,[]);
 sleep.s.auto=false;sleep.s.autoAccept=false;sleep.s.autoPractice=true;sleep.s.fatigue=89.99;
 sleep.advance(1,true);
-assert.ok(sleep.s.restUntil>sleep.s.now,'offline fatigue still causes sleep');
+assert.equal(sleep.s.restUntil,0,'offline fatigue does not force sleep');
+assert.ok(sleep.s.fatigue>=90,'offline practice still accumulates fatigue');
+assert.equal(sleep.rest(),true,'manual sleep remains available');
+sleep.s.autoPractice=false;
 sleep.advance(480,true);
-assert.ok(sleep.s.fatigue<50,'offline sleep still restores 50 fatigue');
+assert.ok(sleep.s.fatigue<50,'manual offline sleep restores 50 fatigue');
 
 const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
@@ -104,4 +107,5 @@ for(const iconName of ['pen-tablet.png','chair.png']){
  assert.ok(icon.includes(Buffer.from('tRNS')),'transparent PNG');
 }
 console.log('Offline income/EXP upgrades, recovery and compatibility checks passed.');
+
 
