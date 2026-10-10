@@ -57,17 +57,17 @@ const spending=new Engine(null,[]);
 spending.s.money=1000000;spending.s.auto=false;spending.s.autoAccept=false;spending.s.autoPractice=false;
 spending.s.now=10079;spending.s.lastFoodWeek=0;
 spending.advance(1);
-assert.equal(spending.s.money,650000);
-assert.equal(spending.s.totals.expense,350000);
+assert.equal(spending.s.money,825000);
+assert.equal(spending.s.totals.expense,175000);
 assert.equal(spending.s.lastFoodWeek,1);
 spending.advance(1);
-assert.equal(spending.s.money,650000,'no daily deductions');
+assert.equal(spending.s.money,825000,'no daily deductions');
 spending.s.now=20159;
 spending.advance(1);
-assert.equal(spending.s.money,300000);
-assert.equal(spending.s.totals.expense,700000);
+assert.equal(spending.s.money,650000);
+assert.equal(spending.s.totals.expense,350000);
 const loaded=new Engine(spending.export(),[]);
-assert.equal(loaded.s.money,300000);
+assert.equal(loaded.s.money,650000);
 assert.equal(loaded.s.lastFoodWeek,2);
 
 // Old already-accepted jobs keep their rolled work and reward in saved state.
