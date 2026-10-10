@@ -99,10 +99,23 @@
        +button('upgrade-offline:'+item.id,label,!!reason,reason?'title="'+esc(reason)+'"':'')
        +'</div></div>';
    }).join('');
+   const owned=Object.entries(engine.s.inventory).filter(([id,count])=>count>0);
+   const inventoryMarkup=owned.length?'<div class="shop-inventory-list">'+owned.map(([id,count])=>{
+     const item=shopItems.find(entry=>entry.id===id);
+     const reason=item?engine.canUseShopItem(item):'아이템 정보를 불러오지 못했습니다.';
+     return '<div class="shop-inventory-item">'
+       +'<div class="shop-inventory-art">'
+       +(item?'<img src="'+esc(item.icon)+'" alt="">':'<span aria-hidden="true">?</span>')
+       +'<span class="shop-inventory-quantity" aria-label="보유 '+count+'개">×'+count+'</span></div>'
+       +'<strong class="shop-inventory-name">'+esc(item?.name||id)+'</strong>'
+       +button('use-shop:'+id,'사용',!!reason,reason?'title="'+esc(reason)+'"':'')
+       +'</div>';
+   }).join('')+'</div>'
+   :'<p class="shop-inventory-empty">보유 아이템 없음</p>';
    return '<div class="shop-sidebar">'
      +'<section class="shop-sidebar-upgrades" aria-label="오프라인 업그레이드"><h3>업그레이드</h3>'+rows+'</section>'
      +'<section class="shop-sidebar-inventory" aria-label="인벤토리"><h3>인벤토리</h3>'
-     +'<p class="shop-inventory-empty">보유 아이템 없음</p></section>'
+     +inventoryMarkup+'</section>'
      +'</div>';
  }
  function shop(){
@@ -115,12 +128,12 @@
    else itemMarkup='<div class="shop-list">'+shopItems.map(item=>{
      const effect=item.effect;
      const supported=effect.type==='fatigue_change'&&Number.isInteger(effect.amount)&&effect.amount<0&&effect.amount>=-100;
-     const desc=supported?'피로도 '+effect.amount+' · 구매 즉시 사용':'아직 사용할 수 없는 효과';
+     const desc=supported?'피로도 '+effect.amount:'아직 사용할 수 없는 효과';
      const reason=engine.canPurchaseShopItem(item);
      return '<article class="shop-item"><img src="'+esc(item.icon)+'" alt="" class="shop-item-icon">'
        +'<div class="shop-item-detail"><strong>'+esc(item.name)+'</strong><small>'+esc(desc)+'</small></div>'
        +'<div class="shop-item-controls"><strong>'+won(item.price)+'</strong>'
-       +button('buy-shop:'+item.id,'구매·사용',!!reason,reason?'title="'+esc(reason)+'"':'')
+       +button('buy-shop:'+item.id,'구매',!!reason,reason?'title="'+esc(reason)+'"':'')
        +'</div></article>';
    }).join('')+'</div>';
    return '<section class="shop-page">'+heading+itemMarkup+'</section>'
@@ -195,9 +208,16 @@
    const item=shopItems.find(entry=>entry.id===id);
    const reason=engine.canPurchaseShopItem(item);
    if(reason){note(reason);render();return;}
-   const fatigueBefore=engine.s.fatigue;
    ok=engine.purchaseShopItem(item);
-   if(ok)note(item.name+' 사용 · 피로도 '+Number((fatigueBefore-engine.s.fatigue).toFixed(1))+' 감소');
+   if(ok)note(item.name+' 구매 · 보유 '+engine.inventoryCount(item.id)+'개');
+   break;
+ }case 'use-shop':{
+   const item=shopItems.find(entry=>entry.id===id);
+   const reason=engine.canUseShopItem(item);
+   if(reason){note(reason);render();return;}
+   const before=engine.s.fatigue;
+   ok=engine.useShopItem(item);
+   if(ok)note(item.name+' 사용 · 피로도 '+Number((before-engine.s.fatigue).toFixed(1))+' 감소');
    break;
  }default:return;}if(!ok)note('현재 조건에서는 실행할 수 없어요. 잔액·슬롯·수면 상태를 확인해주세요.');save();render();if($('inbox-sheet').open)showInbox(true);});
  function showInbox(refresh=false){$('inbox-sheet-content').innerHTML=jobRows(true)||'<p class="empty">아직 도착한 의뢰가 없어요.</p>';if(!refresh)$('inbox-sheet').showModal();}
