@@ -100,7 +100,7 @@ assert.ok(app.includes('engine.useShopItem(item)'),'use click connected');
 assert.ok(app.includes("button('buy-shop:'+item.id,'구매'"),'shop shows buy only');
 assert.ok(app.includes("button('use-shop:'+id,'사용'"),'inventory shows use button');
 assert.ok(app.includes('shop-inventory-quantity'),'inventory badge');
-assert.ok(app.includes("'>×'+count"),'stack counter displayed');
+assert.ok(app.includes(">×'+count"),'stack counter displayed');
 assert.ok(css.includes('.shop-inventory-quantity')&&css.includes('bottom:-5px'),'counter bottom-right');
 assert.ok(app.includes("studio.workbench.v2"),'save key unchanged');
 console.log('Shop inventory purchase/use and save compatibility checks passed.');
