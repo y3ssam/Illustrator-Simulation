@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "soft-drink",
+      "name": "탄산음료",
+      "price": 2200,
+      "icon": "assets/shop/soft-drink-red.png",
+      "effect": {
+        "type": "fatigue_change",
+        "amount": -10
+      }
+    }
+  ]
+}
