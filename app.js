@@ -10,7 +10,7 @@
  let onboarding=false,holdingControl=false,pendingRender=false,notesOpen=innerWidth>=1050,noteTab='stats',queueTab='waiting',dragJob=null;
  let engine,tab='studio',storageOK=true,pausedOther=false,last=Date.now(),accumulator=0,lastSave=0,away=null,toastTimer;
   let shopItems=[],shopState='loading',shopPage=1,inventoryPage=1,journalTab='income';
-  const journalPages={income:1,expense:1,event:1},JOURNAL_PAGE_SIZE=15;
+  const journalPages={income:1,expense:1,event:1},JOURNAL_PAGE_SIZE=18;
  const failedThumbnails=new Set();
  let offlineMode=document.hidden,savedAt=null,segments=[],catchUpScheduled=false;
  let token=crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random();
