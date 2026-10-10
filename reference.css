@@ -149,3 +149,25 @@ html,body{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
  .shop-item-controls{min-width:0}
  .shop-item-controls button{max-width:100%;white-space:normal;text-align:center}
 }
+
+/* Shop details occupy the existing right note-drawer on desktop. */
+.shop-note{overflow:hidden}
+.shop-note .shop-note-body{padding:0;overflow:auto;display:flex;flex-direction:column}
+.shop-sidebar{display:flex;flex-direction:column;min-width:0;min-height:100%;gap:0}
+.shop-sidebar-upgrades{flex:none;padding-bottom:12px;border-bottom:1px solid #e3dac9}
+.shop-sidebar h3{margin:0 0 10px;font-size:13px;font-weight:700;color:#3d4f39}
+.shop-upgrade-row{display:grid;grid-template-columns:32px minmax(0,1fr);gap:9px;padding:9px 0;border-top:1px solid #e9e2d4}
+.shop-upgrade-row:first-of-type{border-top:0}
+.shop-upgrade-row img{width:32px;height:32px;object-fit:contain;image-rendering:pixelated}
+.shop-upgrade-info{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.shop-upgrade-info strong{font-size:12px;line-height:1.3}
+.shop-upgrade-info small{font-size:10px;color:#837e70;font-weight:400}
+.shop-upgrade-info span{font-size:10px;color:#66735d;line-height:1.4}
+.shop-upgrade-info button{font-size:11px;padding:5px 9px;min-height:28px;line-height:1.3;text-align:center;max-width:100%;white-space:normal}
+.shop-sidebar-inventory{flex:1;min-height:125px;display:flex;flex-direction:column;padding-top:16px}
+.shop-inventory-empty{display:flex;align-items:center;justify-content:center;flex:1;min-height:100px;padding:20px 9px;color:#8b877b;font-size:11px;text-align:center}
+@media(max-width:1049px){
+  #view[data-page="shop"] .shop-sidebar{margin-top:18px;background:#fffaf1e8;border:1px solid #e3dac9;border-radius:9px;padding:14px;min-height:250px;height:auto}
+  #view[data-page="shop"] .shop-sidebar-inventory{min-height:115px}
+  #view[data-page="shop"] .shop-upgrade-row{grid-template-columns:32px minmax(0,1fr)}
+}
