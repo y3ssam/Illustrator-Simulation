@@ -285,6 +285,3 @@ html,body{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
  .player-status .fatigue-status{padding-top:6px;margin-top:7px}
 }
 @media(max-width:649px){.list-pager button,.journal-tabs button{min-height:44px}.journal-list .log{grid-template-columns:56px minmax(0,1fr);gap:5px}.journal-list .log-amount{grid-column:2}}
-@media(max-width:649px){.reward-and-deadline{min-height:100px}}
-@media(min-width:650px) and (max-width:1049px){.reward-and-deadline{min-height:120px}}
-@media(min-width:1350px){.reward-and-deadline{min-height:140px}}
