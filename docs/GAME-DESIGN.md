@@ -139,10 +139,10 @@
 - 파일 구분용 숫자 이름(`01.png` 등)과 Git blob SHA는 모두 유지한다. 새로운 썸네일은 각 영문 분류 폴더에 추가한다.
 - 의뢰 생성 시 채색 타입(`낙서/단색/풀채색` → `sketch/mono/color`)과 구도(`두상/흉상/반신/전신` → `head/bust/half/full`)에 맞는 `data/thumbnail-index.json` 목록에서 한 장을 무작위 선택해 의뢰의 `thumbnail`에 저장한다. 이후 화면 이동·저장·불러오기에서 다시 추첨하지 않는다.
 - 기존 v2/v3 저장의 `jobs`, `inbox`, `reservations`에 `thumbnail`이 없는 의뢰는 이미지 목록 로딩 후 한 번만 배정해 다시 저장한다. 기존에 배정된 경로는 파일이 목록에서 사라져도 바꾸지 않고, 이미지가 없거나 로딩 오류가 나면 흰색 썸네일 칸만 표시한다. 저장 버전 v3과 키 `studio.workbench.v2`는 유지한다.
-- `scripts/generate-thumbnail-index.js`는 12개 폴더의 PNG/JPG/JPEG/WebP/GIF 파일을 실제로 열거한다. `main`의 `assets/thumbnails/**` 변경 시 GitHub Actions가 인덱스의 차이가 있을 때만 커밋하고 GitHub Pages 빌드를 요청한다. 번호가 비연속적이어도 모든 실제 파일을 포함한다.
+- `scripts/generate-thumbnail-index.js`는 의뢰용 12개 분류 폴더와 `drawing practice` 폴더의 PNG/JPG/JPEG/WebP/GIF 파일을 실제로 열거한다. `main`의 `assets/thumbnails/**` 변경 시 GitHub Actions가 인덱스의 차이가 있을 때만 커밋하고 GitHub Pages 빌드를 요청한다. 번호가 비연속적이어도 모든 실제 파일을 포함한다.
 
 ## 오늘의 작업대 썸네일 (2026-10-11)
-- 그림 연습 중에는 `assets/thumbnails/drawing practice/01.png`~`03.png` 중 한 장을 무작위로 선택한다. 같은 연습 회차의 화면 갱신에서는 이미지를 유지하고, 다음 회차를 시작하면 다시 선택한다. 대기 중인 의뢰 썸네일을 연습 화면에 표시하지 않는다.
+- 그림 연습 중에는 `data/thumbnail-index.json`의 `drawing practice` 목록에서 한 장을 무작위로 선택한다. 현재 등록된 파일은 `01.png`~`07.png`이며, 폴더에 추가된 이미지도 자동 목록 갱신 후 선택 대상이 된다. 같은 연습 회차의 화면 갱신에서는 이미지를 유지하고, 다음 회차를 시작하면 다시 선택한다. 대기 중인 의뢰 썸네일을 연습 화면에 표시하지 않는다.
 - 연습과 의뢰의 모든 썸네일 칸은 흰색 바탕이며, 이미지에는 같은 약한 블러와 아래쪽 1/3 흰색 그라데이션을 적용한다. 예전 기본 썸네일 시트 `assets/02-work-thumbnails.png`·`.webp`는 제거한다.
 - 작업대 정보 박스와 보상·시간 영역은 연습 및 의뢰 작업에서 같은 폭을 사용한다. 긴 금액·시간 문구는 박스 안에서 줄바꿈한다.
 

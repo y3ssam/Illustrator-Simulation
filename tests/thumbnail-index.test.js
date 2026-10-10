@@ -8,7 +8,10 @@ const root = path.resolve(__dirname, '..');
 const index = JSON.parse(fs.readFileSync(path.join(root, 'data', 'thumbnail-index.json'), 'utf8'));
 const typeNames = { 낙서:'sketch', 단색:'mono', 풀채색:'color' };
 const scopeNames = { 두상:'head', 흉상:'bust', 반신:'half', 전신:'full' };
-assert.equal(Object.keys(index).length, 12);
+assert.equal(Object.keys(index).length, 13);
+assert.ok(index['drawing practice'].length>=7);
+assert.ok(index['drawing practice'].every(image=>image.startsWith('assets/thumbnails/drawing practice/')));
+for(const name of ['04.png','05.png','06.png','07.png'])assert.ok(index['drawing practice'].includes(`assets/thumbnails/drawing practice/${name}`));
 const sampleIndex = structuredClone(index);
 sampleIndex['sketch/head'] = ['assets/thumbnails/sketch/head/01.png', 'assets/thumbnails/sketch/head/03.png'];
 for (const [type, folder] of Object.entries(typeNames)) for (const [scope, subfolder] of Object.entries(scopeNames)) {
@@ -85,6 +88,14 @@ try {
   ]);
   fs.rmSync(path.join(folder, '03.png'));
   assert.equal(buildIndex(fixture)['sketch/head'].length, 2);
+  const practiceFolder=path.join(fixture,'assets','thumbnails','drawing practice');
+  fs.mkdirSync(practiceFolder,{recursive:true});
+  for(const name of ['01.png','04.png','11.webp','notes.txt'])fs.writeFileSync(path.join(practiceFolder,name),'x');
+  assert.deepEqual(buildIndex(fixture)['drawing practice'],[
+    'assets/thumbnails/drawing practice/01.png',
+    'assets/thumbnails/drawing practice/04.png',
+    'assets/thumbnails/drawing practice/11.webp'
+  ]);
 } finally {
   if (!fixture.startsWith(__dirname + path.sep)) throw new Error('Unexpected fixture path');
   fs.rmSync(fixture, { recursive:true, force:true });

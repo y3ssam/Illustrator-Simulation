@@ -7,16 +7,20 @@ const imageExtension = /\.(?:png|jpe?g|webp|gif)$/i;
 
 function buildIndex(root) {
   const index = {};
-  for (const type of types) for (const scope of scopes) {
-    const key = `${type}/${scope}`;
-    const directory = path.join(root, 'assets', 'thumbnails', type, scope);
-    index[key] = fs.existsSync(directory)
-      ? fs.readdirSync(directory, { withFileTypes: true })
-          .filter(entry => entry.isFile() && imageExtension.test(entry.name))
-          .map(entry => `assets/thumbnails/${key}/${entry.name}`)
+  const imagePaths=(key)=>{
+    const directory=path.join(root,'assets','thumbnails',...key.split('/'));
+    return fs.existsSync(directory)
+      ? fs.readdirSync(directory,{withFileTypes:true})
+          .filter(entry=>entry.isFile()&&imageExtension.test(entry.name))
+          .map(entry=>`assets/thumbnails/${key}/${entry.name}`)
           .sort()
       : [];
+  };
+  for (const type of types) for (const scope of scopes) {
+    const key = `${type}/${scope}`;
+    index[key]=imagePaths(key);
   }
+  index['drawing practice']=imagePaths('drawing practice');
   return index;
 }
 

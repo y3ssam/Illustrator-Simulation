@@ -48,14 +48,17 @@
   function pager(scope,page,total){return total<2?'':`<nav class="list-pager" aria-label="${scope} 페이지"><button data-page="${scope}:prev" ${page===1?'disabled':''} aria-label="이전 페이지">이전</button><span>${page} / ${total}</span><button data-page="${scope}:next" ${page===total?'disabled':''} aria-label="다음 페이지">다음</button></nav>`;}
   function journal(){const s=engine.s,rows=s.logs.filter(l=>l.category===journalTab),paged=pageSlice(rows,journalPages[journalTab],JOURNAL_PAGE_SIZE);journalPages[journalTab]=paged.page;return `<section class="journal"><div class="section-head"><h2>작업실의 기록</h2><span class="muted">납품 ${s.totals.completed} · 실패 ${s.totals.failed}</span></div><p class="muted journal-totals">수입 ${won(s.totals.income)} · 지출 ${won(s.totals.expense)} · 팁 ${won(s.totals.tips)}</p><nav class="journal-tabs" aria-label="기록 분류">${[['income','수입'],['expense','지출'],['event','사건']].map(([key,label])=>`<button data-journal="${key}" aria-pressed="${journalTab===key}">${label}</button>`).join('')}</nav><div class="journal-list">${paged.rows.map(l=>`<div class="log"><time>${stamp(l.at)}</time><span>${esc(l.text)}</span>${l.amount!==undefined?`<strong class="log-amount ${l.category}">${l.amount>0?'+':''}${won(l.amount)}</strong>`:''}</div>`).join('')||'<p class="empty">기록이 없습니다.</p>'}</div>${pager(journalTab,paged.page,paged.total)}</section>`;}
  const thumb=q=>`<span class="work-thumb" role="img" aria-label="장식용 그림 썸네일">${q?.thumbnail&&!failedThumbnails.has(q.thumbnail)?`<img src="${esc(q.thumbnail)}" alt="" loading="lazy">`:''}</span>`;
- const practiceThumbnails=[1,2,3].map(n=>`assets/thumbnails/drawing practice/0${n}.png`);
+ let practiceThumbnails=[];
  let practiceThumbnailSession=-1,practiceThumbnail=null;
- function practiceThumb(session){if(practiceThumbnailSession!==session){practiceThumbnailSession=session;practiceThumbnail=practiceThumbnails[Math.floor(Math.random()*practiceThumbnails.length)];}return thumb({thumbnail:practiceThumbnail});}
+ function practiceThumb(session){if(practiceThumbnailSession!==session){practiceThumbnailSession=session;practiceThumbnail=practiceThumbnails.length?practiceThumbnails[Math.floor(Math.random()*practiceThumbnails.length)]:null;}return thumb({thumbnail:practiceThumbnail});}
  async function loadThumbnailIndex(){
    try{
      const response=await fetch('data/thumbnail-index.json',{cache:'no-store'});
      if(!response.ok)throw new Error('이미지 목록을 읽지 못했습니다.');
-     if(!engine.setThumbnailIndex(await response.json()))throw new Error('이미지 목록 형식이 올바르지 않습니다.');
+     const index=await response.json();
+     if(!engine.setThumbnailIndex(index))throw new Error('이미지 목록 형식이 올바르지 않습니다.');
+     practiceThumbnails=Array.isArray(index['drawing practice'])?index['drawing practice'].filter(path=>typeof path==='string'&&/^assets\/thumbnails\/drawing practice\/[^/\\]+\.(?:png|jpe?g|webp|gif)$/i.test(path)):[];
+     practiceThumbnailSession=-1;
      if(!pausedOther&&engine.assignMissingThumbnails())save();
      render();
    }catch(error){console.warn('의뢰 썸네일 목록:',error);}

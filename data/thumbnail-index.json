@@ -47,5 +47,14 @@
   "color/full": [
     "assets/thumbnails/color/full/01.png",
     "assets/thumbnails/color/full/02.png"
+  ],
+  "drawing practice": [
+    "assets/thumbnails/drawing practice/01.png",
+    "assets/thumbnails/drawing practice/02.png",
+    "assets/thumbnails/drawing practice/03.png",
+    "assets/thumbnails/drawing practice/04.png",
+    "assets/thumbnails/drawing practice/05.png",
+    "assets/thumbnails/drawing practice/06.png",
+    "assets/thumbnails/drawing practice/07.png"
   ]
 }
