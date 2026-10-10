@@ -67,6 +67,7 @@ for(let n=0;n<1000;n++){
   e.s.plan=(n*7)%151;
   q.work=1+(n*13.71)%350;
   const predicted=e.projection().get(q.id);
+  e.random=()=>.99; // Compare against the no-new-incident projection path.
   while(e.s.totals.completed===0&&e.s.now<predicted+2)e.advance(1);
   assert.equal(e.s.now,predicted,'projection matches minute simulation in case '+n);
 }

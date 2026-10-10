@@ -21,6 +21,8 @@
   ];
   const PRACTICE = {duration:30,exp:2};
   const WEEKLY_FOOD_COST = 175000;
+  const INCIDENTS = typeof module!=='undefined'&&module.exports?require('./incidents.js'):root.StudioIncidents;
+  const INCIDENT_INTERVAL = 150;
   const TIPS = { common: 1000, uncommon: 3000, rare: 8000, legendary: 20000 };
   const copy = x => JSON.parse(JSON.stringify(x));
   const fail = text => { throw new Error(text); };
@@ -44,7 +46,7 @@
     });
   }
   function fresh(seed=Date.now()) {
-    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,offlineUpgrades:{tablet:0,chair:0},inventory:{},level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,practiceDuration:PRACTICE.duration,restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,lastFoodWeek:0};
+    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,offlineUpgrades:{tablet:0,chair:0},inventory:{},level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,practiceDuration:PRACTICE.duration,restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,lastFoodWeek:0,workIncidentClock:0,workEffectSeq:0,activeWorkEffects:[],itemCooldowns:{}};
   }
   function legacyLogCategory(text) {
     if(/납품(?: \(오프라인\))? ·|^중복 작업물 |원 환급$/.test(text))return 'income';
@@ -92,6 +94,28 @@
       });
     };
     s.jobs=parseJobs(raw.jobs,15);s.inbox=parseJobs(raw.inbox,Infinity);s.reservations=parseJobs(raw.reservations??[],[5,10,15,20].filter(level=>s.level>=level).length);
+    s.workIncidentClock=number(raw.workIncidentClock??0,0,INCIDENT_INTERVAL-1,'사건 판정 시간',true);
+    s.workEffectSeq=number(raw.workEffectSeq??0,0,Number.MAX_SAFE_INTEGER,'사건 순서',true);
+    if(!Array.isArray(raw.activeWorkEffects??[])||raw.activeWorkEffects.length>100000)fail('활성 사건 목록을 확인해주세요.');
+    const effectIDs=new Set();
+    s.activeWorkEffects=(raw.activeWorkEffects??[]).map(e=>{
+      const row=INCIDENTS.byId[e?.incidentId];
+      if(!e||!row||!idOK(e.instanceId)||effectIDs.has(e.instanceId)||!['speed','fatigueRate','jobExp'].includes(row.effect))fail('활성 사건을 확인해주세요.');
+      effectIDs.add(e.instanceId);
+      const startedAt=number(e.startedAt,0,s.now,'사건 발생 시각');
+      if(row.effect==='jobExp'){
+        if(!idOK(e.jobId)||![...s.jobs,...s.reservations].some(q=>q.id===e.jobId))fail('의뢰 보너스를 확인해주세요.');
+        return {instanceId:e.instanceId,incidentId:row.id,startedAt,jobId:e.jobId};
+      }
+      const expiresAt=number(e.expiresAt,startedAt,1e10,'사건 만료 시각');
+      return {instanceId:e.instanceId,incidentId:row.id,startedAt,expiresAt};
+    }).filter(e=>e.expiresAt===undefined||e.expiresAt>s.now);
+    if(!raw.itemCooldowns||typeof raw.itemCooldowns!=='object'||Array.isArray(raw.itemCooldowns)){
+      if(raw.itemCooldowns!==undefined)fail('아이템 쿨타임을 확인해주세요.');
+    }else{
+      const entries=Object.entries(raw.itemCooldowns);if(entries.length>500)fail('아이템 쿨타임이 너무 많습니다.');
+      for(const [id,until] of entries){if(!/^[a-z][a-z0-9_-]{0,63}$/.test(id))fail('아이템 쿨타임 ID를 확인해주세요.');const time=number(until,0,1e10,'아이템 쿨타임');if(time>s.now)s.itemCooldowns[id]=time;}
+    }
     const order=raw.queueOrder??[];if(!Array.isArray(order)||order.length>15||new Set(order).size!==order.length||order.some(id=>!s.jobs.some(q=>q.id===id)))fail('대기 순서를 확인해주세요.');s.queueOrder=[...order];
     if(raw.active!==null&&!s.jobs.some(q=>q.id===raw.active))fail('진행 중 의뢰를 확인해주세요.');s.active=raw.active;
     // Old event, promotion, repair and temporary-effect fields are deliberately discarded.
@@ -130,7 +154,7 @@
     s.logs=[{at:s.now,category:'event',text:'원본 저장을 가져왔습니다. 진행도는 보존하고 이전 임시 효과는 정리했습니다.'}];return validateSave(s);
   }
   class Engine {
-    constructor(state,catalog=[]) {this.s=state?validateSave(state):fresh();this.catalog=validateCatalog(catalog);this.thumbnailIndex=null;}
+    constructor(state,catalog=[]) {this.s=state?validateSave(state):fresh();this.catalog=validateCatalog(catalog);this.thumbnailIndex=null;this.recentIncidents=[];}
     setThumbnailIndex(index){
       if(!index||typeof index!=='object'||Array.isArray(index))return false;
       const next={};
@@ -179,13 +203,18 @@
       return true;
     }
     // Shop items use their stable catalog IDs as inventory keys.
+    validShopEffect(item){
+      const e=item?.effect;
+      if(e?.type==='fatigue_change')return Number.isInteger(e.amount)&&e.amount<0&&e.amount>=-100;
+      return e?.type==='remove_debuff'&&Array.isArray(e.targets)&&e.targets.length>0&&e.targets.length<=30
+        &&new Set(e.targets).size===e.targets.length&&e.targets.every(id=>INCIDENTS.byId[id]?.kind==='debuff'&&!!INCIDENTS.byId[id].duration)
+        &&item.cooldownMinutes===7200;
+    }
     canPurchaseShopItem(item){
       if(!item||typeof item!=='object'||typeof item.id!=='string'||!/^[a-z][a-z0-9_-]{0,63}$/.test(item.id)
          ||typeof item.name!=='string'||!item.name.trim()||item.name.length>80
          ||!Number.isSafeInteger(item.price)||item.price<0||item.price>1e9)return '아이템 정보를 확인해주세요.';
-      const effect=item.effect;
-      if(!effect||effect.type!=='fatigue_change'||!Number.isInteger(effect.amount)
-         ||effect.amount>=0||effect.amount< -100)return '아직 구매할 수 없는 아이템입니다.';
+      if(!this.validShopEffect(item))return '아직 구매할 수 없는 아이템입니다.';
       const count=this.inventoryCount(item.id);
       if(count>=Number.MAX_SAFE_INTEGER)return '아이템 보유 수량이 최대치입니다.';
       if(this.s.money<item.price)return '잔액이 부족합니다.';
@@ -202,29 +231,70 @@
       return true;
     }
     canUseShopItem(item){
-      if(!item||typeof item.id!=='string'||!item.effect||item.effect.type!=='fatigue_change'
-         ||!Number.isInteger(item.effect.amount)||item.effect.amount>=0||item.effect.amount< -100)return '아직 사용할 수 없는 아이템입니다.';
+      if(!item||typeof item.id!=='string'||!this.validShopEffect(item))return '아직 사용할 수 없는 아이템입니다.';
       if(this.inventoryCount(item.id)<1)return '보유한 아이템이 없습니다.';
+      if(item.effect.type==='remove_debuff'){
+        if(this.cooldownRemaining(item.id)>0)return '재사용까지 '+this.cooldownText(this.cooldownRemaining(item.id));
+        if(!this.s.activeWorkEffects.some(e=>item.effect.targets.includes(e.incidentId)))return '해제할 디버프가 없습니다.';
+        return '';
+      }
       if(this.s.fatigue<=0)return '피로도가 이미 0입니다.';
       return '';
     }
+    cooldownRemaining(id){return Math.max(0,(this.s.itemCooldowns[id]??0)-this.s.now);}
+    cooldownText(minutes){const totalHours=Math.ceil(minutes/60),days=Math.floor(totalHours/24),hours=totalHours%24;return days+'일 '+hours+'시간';}
     useShopItem(item){
       if(this.canUseShopItem(item))return false;
-      const before=this.s.fatigue;
       const count=this.inventoryCount(item.id);
-      this.s.fatigue=Math.max(0,before+item.effect.amount);
+      if(item.effect.type==='remove_debuff'){
+        const removed=this.s.activeWorkEffects.filter(e=>item.effect.targets.includes(e.incidentId));
+        this.s.activeWorkEffects=this.s.activeWorkEffects.filter(e=>!item.effect.targets.includes(e.incidentId));
+        this.s.itemCooldowns[item.id]=this.s.now+item.cooldownMinutes;
+        this.log(item.name+' 사용 · '+removed.map(e=>INCIDENTS.byId[e.incidentId].name).join(', ')+' 해제 / 보유 '+(count-1)+'개');
+      }else{
+        const before=this.s.fatigue;
+        this.s.fatigue=Math.max(0,before+item.effect.amount);
+        const recovered=Number((before-this.s.fatigue).toFixed(2));
+        this.log(item.name+' 사용 · 피로도 '+recovered+' 감소 / 보유 '+(count-1)+'개');
+      }
       if(count===1)delete this.s.inventory[item.id];
       else this.s.inventory[item.id]=count-1;
-      const recovered=Number((before-this.s.fatigue).toFixed(2));
-      this.log(item.name+' 사용 · 피로도 '+recovered+' 감소 / 보유 '+(count-1)+'개');
       return true;
     }
     stats(){return {skill:this.s.skill,plan:this.s.plan,speed:this.s.speed};}
     slots(){const p=this.stats().plan;return 3+[10,25,50].filter(n=>p>=n).length;}
     reservationSlots(){return [5,10,15,20].filter(level=>this.s.level>=level).length;}
     overworked(fatigue=this.s.fatigue){return fatigue>=90;}
-    rate(fatigue=this.s.fatigue){return (1+this.stats().speed*.01)*(this.overworked(fatigue)?.5:1);}
-    fatigueRate(){return (1-this.stats().plan*.005)/15;}
+    effectTotal(kind,at=this.s.now,jobId){return this.s.activeWorkEffects.reduce((sum,e)=>{const row=INCIDENTS.byId[e.incidentId];return sum+(row.effect===kind&&(e.expiresAt===undefined||e.expiresAt>at)&&(!e.jobId||e.jobId===jobId)?row.amount:0);},0);}
+    expireWorkEffects(){this.s.activeWorkEffects=this.s.activeWorkEffects.filter(e=>e.expiresAt===undefined||e.expiresAt>this.s.now);}
+    discardJobEffects(jobId){this.s.activeWorkEffects=this.s.activeWorkEffects.filter(e=>e.jobId!==jobId);}
+    rate(fatigue=this.s.fatigue,at=this.s.now){return (1+this.stats().speed*.01)*Math.max(0,1+this.effectTotal('speed',at)/100)*(this.overworked(fatigue)?.5:1);}
+    fatigueRate(at=this.s.now){return (1-this.stats().plan*.005)/15*Math.max(0,1+this.effectTotal('fatigueRate',at)/100);}
+    incidentChances(fatigue=this.s.fatigue){return fatigue<25?[.02,.01]:fatigue<50?[.015,.01]:fatigue<75?[.01,.015]:[.01,.02];}
+    triggerIncident(row,job,offline=false){
+      if(!row||!INCIDENTS.byId[row.id]||!job)return false;
+      const effect=row.effect;
+      if(effect==='fatigue')this.s.fatigue=Math.min(100,Math.max(0,this.s.fatigue+row.amount));
+      else if(effect==='progress'){
+        job.done=Math.min(job.work,Math.max(job.done,job.done+job.work*row.amount/100));
+        if(job.done>=job.work&&this.s.now<=job.deadline)this.complete(job,offline);
+      }else{
+        const instance={instanceId:'wi'+(++this.s.workEffectSeq),incidentId:row.id,startedAt:this.s.now};
+        if(effect==='jobExp')instance.jobId=job.id;else instance.expiresAt=this.s.now+row.duration;
+        this.s.activeWorkEffects.push(instance);
+      }
+      this.log('작업 중 사건 · '+row.name+' ('+INCIDENTS.describe(row)+')');
+      if(!offline)this.recentIncidents.push(row.name);
+      return true;
+    }
+    rollWorkIncident(job,offline=false){
+      const [buff,debuff]=this.incidentChances(),roll=this.random();
+      const kind=roll<buff?'buff':roll<buff+debuff?'debuff':null;
+      if(!kind)return false;
+      const eligible=(kind==='buff'?INCIDENTS.buffs:INCIDENTS.debuffs).filter(row=>INCIDENTS.eligible(row,job,this.s.now));
+      if(!eligible.length)return false;
+      return this.triggerIncident(eligible[Math.floor(this.random()*eligible.length)],job,offline);
+    }
     unlocked(){return UNLOCKS.filter(u=>u.level<=this.s.level);}
     openTypes(){return this.unlocked().filter(u=>!this.s.closedTypes.includes(UNLOCKS.indexOf(u)));}
     toggleType(index){const u=UNLOCKS[index];if(!Number.isInteger(index)||!u||u.level>this.s.level)return false;const closed=this.s.closedTypes.includes(index);this.s.closedTypes=closed?this.s.closedTypes.filter(i=>i!==index):[...this.s.closedTypes,index];this.log(u.type+' '+u.scope+' 의뢰 접수 '+(closed?'열림':'닫음'));return true;}
@@ -245,16 +315,25 @@
     togglePractice(){this.s.autoPractice=!this.s.autoPractice;this.s.practicing=false;this.log('자동 연습 '+(this.s.autoPractice?'켜짐':'꺼짐')+' · 의뢰 작업이 우선입니다.');}
     orderedJobs(extra){const rows=[...this.s.jobs];if(extra)rows.push(extra);const order=new Map(this.s.queueOrder.map((id,i)=>[id,i]));return rows.sort((a,b)=>(order.get(a.id)??1e9)-(order.get(b.id)??1e9)||a.deadline-b.deadline);}
     reorder(id,before){if(id===this.s.active)return false;const waiting=this.orderedJobs().filter(q=>q.id!==this.s.active);const q=waiting.find(q=>q.id===id);if(!q||(before&&!waiting.some(q=>q.id===before)))return false;if(id===before)return true;const rest=waiting.filter(row=>row!==q);const index=before?rest.findIndex(row=>row.id===before):rest.length;rest.splice(index,0,q);this.s.queueOrder=rest.map(row=>row.id);this.log('대기 순서를 바꿨습니다. 현재 작업은 유지합니다.');return true;}
-    projection(extra){const active=this.s.jobs.find(q=>q.id===this.s.active);const rest=this.orderedJobs(extra).filter(q=>q!==active);const jobs=active?[active,...rest]:rest;let now=Math.max(this.s.now,this.s.restUntil),fat=this.s.fatigue;if(this.s.restUntil>this.s.now)fat=Math.max(0,fat-50);const results=new Map(),fr=this.fatigueRate();
-      for(const q of jobs){let need=Math.max(0,q.work-q.done);if(need>0&&!this.overworked(fat)){
-          // The minute that reaches 90 still runs at the speed at its start.
-          const normalMinutes=Math.ceil((90-fat)/fr),normalRate=this.rate(fat);
-          const minutes=Math.min(normalMinutes,Math.ceil(need/normalRate));
-          now+=minutes;fat=Math.min(100,fat+minutes*fr);need=Math.max(0,need-minutes*normalRate);
+    projection(extra){
+      const active=this.s.jobs.find(q=>q.id===this.s.active),rest=this.orderedJobs(extra).filter(q=>q!==active),jobs=active?[active,...rest]:rest;
+      let now=Math.max(this.s.now,this.s.restUntil),fat=this.s.fatigue;
+      if(this.s.restUntil>this.s.now)fat=Math.max(0,fat-50);
+      const results=new Map();
+      for(const q of jobs){
+        let need=Math.max(0,q.work-q.done);
+        while(need>0){
+          const nextExpiry=this.s.activeWorkEffects.reduce((min,e)=>e.expiresAt>now?Math.min(min,e.expiresAt):min,Infinity);
+          const rate=this.rate(fat,now),fr=this.fatigueRate(now);
+          if(rate<=0){if(!Number.isFinite(nextExpiry)){now=Infinity;break;}now=nextExpiry;continue;}
+          const toOverwork=fr>0&&fat<90?Math.ceil((90-fat)/fr):Infinity;
+          const minutes=Math.min(Math.ceil(need/rate),nextExpiry-now,toOverwork);
+          if(minutes<=0){now=nextExpiry;continue;}
+          now+=minutes;fat=Math.min(100,fat+minutes*fr);need=Math.max(0,need-minutes*rate);
         }
-        if(need>0){const minutes=Math.ceil(need/this.rate(Math.max(90,fat)));now+=minutes;fat=Math.min(100,fat+minutes*fr);}
         results.set(q.id,now);
-      }return results;
+      }
+      return results;
     }
     canAccept(q){if(this.s.jobs.length>=this.slots())return '작업 슬롯이 가득 찼어요.';const p=this.projection(q);if([...this.s.jobs,q].some(j=>p.get(j.id)>j.deadline))return '예상 휴식까지 포함하면 마감이 부족해요.';return '';}
     accept(id){const q=[...this.s.inbox,...this.s.reservations].find(j=>j.id===id);if(!q)return false;const reason=this.canAccept(q);if(reason)return false;this.s.inbox=this.s.inbox.filter(j=>j!==q);this.s.reservations=this.s.reservations.filter(j=>j!==q);this.s.jobs.push(q);this.log(q.type+' '+q.scope+' 의뢰 수락');return true;}
@@ -284,11 +363,14 @@
     lotto(){const day=Math.floor(this.s.now/1440);if(this.s.lottoDay===day||this.s.money<1000)return null;this.s.lottoDay=day;this.money(-1000);this.log('복권 구매 · 하루 1장','expense',-1000);const r=this.random(),prize=r<.5?0:r<.85?1000:r<.98?3000:10000;this.money(prize);this.log('복권 결과 '+prize+'원',prize>0?'income':'event',prize>0?prize:undefined);return prize;}
     grantCollection(applicantID){const a=this.catalog.find(x=>x.id===applicantID);if(!a||!a.works.length){this.log('외주 완료 · 작업물 데이터가 없어 수집 처리를 보류했습니다.');return;}const w=this.pick(a.works),key=a.id+'/'+w.id;if(!this.s.met.includes(a.id))this.s.met.push(a.id);if(this.s.collection.includes(key)){const tip=TIPS[w.tier];this.money(tip);this.s.totals.tips+=tip;this.log('중복 작업물 «'+w.title+'» · '+tip+'원 팁','income',tip);}else{this.s.collection.push(key);this.log('새 작업물 «'+w.title+'» 도감 등록');}}
     complete(q,offline=false){
+      const expBonus=this.effectTotal('jobExp',this.s.now,q.id);
+      this.discardJobEffects(q.id);
       this.s.jobs=this.s.jobs.filter(j=>j!==q);
       this.s.queueOrder=this.s.queueOrder.filter(id=>id!==q.id);
       if(this.s.active===q.id)this.s.active=null;
       const gold=offline?Math.floor(q.gold*this.offlineRate('tablet')/100):q.gold;
-      const exp=offline?Math.floor(q.exp*this.offlineRate('chair')/100):q.exp;
+      const boostedExp=Math.floor(q.exp*(1+expBonus/100));
+      const exp=offline?Math.floor(boostedExp*this.offlineRate('chair')/100):boostedExp;
       this.money(gold);this.s.totals.completed++;this.gainExp(exp);
       this.log(q.type+' '+q.scope+' 납품'+(offline?' (오프라인)':'')+' · '+gold+'원 / '+exp+' EXP','income',gold);
       if(q.source==='outsourcing')this.grantCollection(q.applicant);
@@ -296,17 +378,26 @@
     arrivals(){if(!this.openTypes().length)return;const chance=this.arrivalChance();if(this.random()*100<chance)this.s.inbox.push(this.createJob());const available=this.catalog.filter(a=>a.works.length&&a.minLevel<=this.s.level&&a.minSkill<=this.stats().skill);if(available.length&&this.random()*100<Math.min(5,.5+(this.s.level-1)*.03+this.stats().skill*.005)){const a=this.pick(available);this.s.inbox.push(this.createJob('outsourcing',a));if(!this.s.met.includes(a.id))this.s.met.push(a.id);this.log(a.name+'의 외주 제안 도착');}}
     checkInbox(){for(const offer of [...this.s.inbox]){offer.inboxWait=(offer.inboxWait??0)+1;if(offer.inboxWait<1440)continue;offer.inboxWait=0;if(this.random()<.25){this.s.inbox=this.s.inbox.filter(j=>j!==offer);this.log(offer.type+' '+offer.scope+' 의뢰 취소 · 도착함에서 24시간 대기 후 신청자가 취소했습니다.');}}}
     advance(minutes,offline=false){number(minutes,0,1e6,'진행 시간',true);if(typeof offline!=='boolean')fail('오프라인 상태를 확인해주세요.');for(let i=0;i<minutes;i++){
-      const sleeping=this.s.restUntil>this.s.now;this.chooseNext();const q=this.s.jobs.find(j=>j.id===this.s.active);this.s.now++;
+      this.expireWorkEffects();
+      const sleeping=this.s.restUntil>this.s.now;this.chooseNext();const q=this.s.jobs.find(j=>j.id===this.s.active);
+      const workRate=this.rate(),workFatigue=this.fatigueRate();
+      this.s.now++;
       // Keep each inbox offer's remaining time fixed until it is accepted.
       for(const offer of [...this.s.inbox,...this.s.reservations]){offer.deadline++;offer.expires++;}
       this.checkInbox();
       if(sleeping){if(this.s.restUntil<=this.s.now){this.s.fatigue=Math.max(0,this.s.fatigue-50);this.log('수면 완료 · 피로 50 회복');}}
-      else if(q){q.done=Math.min(q.work,q.done+this.rate());this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate());if(q.done>=q.work&&this.s.now<=q.deadline)this.complete(q,offline);}
-      else if(this.s.autoPractice||this.s.practicing){this.s.practiceDone++;this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate()*.5);if(this.s.practiceDone>=PRACTICE.duration){this.s.practiceDone=0;this.s.practicing=false;this.s.totals.practiceSessions++;const practiceExp=offline?Math.floor(PRACTICE.exp*this.offlineRate('chair')/100):PRACTICE.exp;this.gainExp(practiceExp);this.log('그림 연습 완료'+(offline?' (오프라인)':'')+' · '+practiceExp+' EXP');}}
-      for(const j of [...this.s.jobs])if(j.deadline<=this.s.now){this.s.jobs=this.s.jobs.filter(k=>k!==j);this.s.queueOrder=this.s.queueOrder.filter(id=>id!==j.id);if(this.s.active===j.id)this.s.active=null;this.s.totals.failed++;this.log(j.type+' '+j.scope+' 마감 초과 · 의뢰 종료');}
+      else if(q){q.done=Math.min(q.work,q.done+workRate);this.s.fatigue=Math.min(100,this.s.fatigue+workFatigue);if(q.done>=q.work&&this.s.now<=q.deadline)this.complete(q,offline);}
+      else if(this.s.autoPractice||this.s.practicing){this.s.practiceDone++;this.s.fatigue=Math.min(100,this.s.fatigue+workFatigue*.5);if(this.s.practiceDone>=PRACTICE.duration){this.s.practiceDone=0;this.s.practicing=false;this.s.totals.practiceSessions++;const practiceExp=offline?Math.floor(PRACTICE.exp*this.offlineRate('chair')/100):PRACTICE.exp;this.gainExp(practiceExp);this.log('그림 연습 완료'+(offline?' (오프라인)':'')+' · '+practiceExp+' EXP');}}
+      for(const j of [...this.s.jobs])if(j.deadline<=this.s.now){this.discardJobEffects(j.id);this.s.jobs=this.s.jobs.filter(k=>k!==j);this.s.queueOrder=this.s.queueOrder.filter(id=>id!==j.id);if(this.s.active===j.id)this.s.active=null;this.s.totals.failed++;this.log(j.type+' '+j.scope+' 마감 초과 · 의뢰 종료');}
       const week=Math.floor(this.s.now/10080);if(week>this.s.lastFoodWeek){const cost=(week-this.s.lastFoodWeek)*WEEKLY_FOOD_COST;this.money(-cost);this.s.lastFoodWeek=week;this.log('주간 식비 '+cost+'원 지출','expense',-cost);}
       if(++this.s.arrivalClock>=10){this.s.arrivalClock=0;this.arrivals();}
       this.admit();
+      this.expireWorkEffects();
+      if(++this.s.workIncidentClock>=INCIDENT_INTERVAL){
+        this.s.workIncidentClock=0;
+        const current=this.s.jobs.find(j=>j.id===this.s.active);
+        if(!sleeping&&q&&current?.id===q.id)this.rollWorkIncident(current,offline);
+      }
     }}
     import(raw){const next=[2,VERSION].includes(raw?.version)?validateSave(raw):migrateLegacy(raw);this.s=next;this.assignMissingThumbnails();this.log('저장 데이터 불러오기 완료');return true;}
     export(){return copy(this.s);}

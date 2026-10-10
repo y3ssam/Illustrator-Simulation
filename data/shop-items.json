@@ -10,6 +10,14 @@
         "type": "fatigue_change",
         "amount": -10
       }
-    }
+    },
+    {"id":"ice-americano","name":"아이스 아메리카노","price":3500,"icon":"assets/shop/ice-americano.png","effect":{"type":"remove_debuff","targets":["focus-loss","brain-fog","broken-flow"]},"cooldownMinutes":7200},
+    {"id":"heated-patch","name":"붙이는 온열 패치","price":4500,"icon":"assets/shop/heated-patch.png","effect":{"type":"remove_debuff","targets":["aching-wrist","stiff-shoulders"]},"cooldownMinutes":7200},
+    {"id":"eye-drops","name":"일회용 인공눈물","price":2000,"icon":"assets/shop/eye-drops.png","effect":{"type":"remove_debuff","targets":["blurred-eyes"]},"cooldownMinutes":7200},
+    {"id":"pose-sketch","name":"포즈 스케치 용지","price":3000,"icon":"assets/shop/pose-sketch.png","effect":{"type":"remove_debuff","targets":["bad-proportions","unsatisfying-rough"]},"cooldownMinutes":7200},
+    {"id":"color-test","name":"색상 테스트 용지","price":1700,"icon":"assets/shop/color-test.png","effect":{"type":"remove_debuff","targets":["color-indecision"]},"cooldownMinutes":7200},
+    {"id":"replacement-nib","name":"교체용 펜촉","price":2500,"icon":"assets/shop/replacement-nib.png","effect":{"type":"remove_debuff","targets":["unstable-pen"]},"cooldownMinutes":7200},
+    {"id":"disposable-earplugs","name":"일회용 귀마개","price":1500,"icon":"assets/shop/disposable-earplugs.png","effect":{"type":"remove_debuff","targets":["outside-noise"]},"cooldownMinutes":7200},
+    {"id":"edit-checklist","name":"수정 체크리스트 용지","price":5000,"icon":"assets/shop/edit-checklist.png","effect":{"type":"remove_debuff","targets":["perfectionism","detail-obsession"]},"cooldownMinutes":7200}
   ]
 }

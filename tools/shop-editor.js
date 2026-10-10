@@ -32,11 +32,12 @@
       if(!Number.isInteger(durationMinutes)||durationMinutes<1||durationMinutes>1000000)throw Error('지속 시간은 1~1,000,000 게임분이어야 합니다.');
       effect={type:'timed_buff',target:e.target,value,durationMinutes};
     }else if(e.type==='remove_debuff'){
-      const target=String(e.target??'').trim();
-      if(!/^[a-z][a-z0-9_-]{0,63}$/.test(target))throw Error('해제할 디버프 ID를 입력하세요.');
-      effect={type:'remove_debuff',target};
+      const targets=Array.isArray(e.targets)?e.targets:String(e.targets??e.target??'').split(',').map(x=>x.trim()).filter(Boolean);
+      if(!targets.length||targets.length>30||new Set(targets).size!==targets.length||targets.some(target=>!/^[a-z][a-z0-9_-]{0,63}$/.test(target)))throw Error('해제할 디버프 ID를 쉼표로 구분해 입력하세요.');
+      if(Number(raw.cooldownMinutes)!==7200)throw Error('디버프 제거 아이템 재사용 시간은 7,200게임분이어야 합니다.');
+      effect={type:'remove_debuff',targets};
     }else throw Error('지원하지 않는 효과 종류입니다.');
-    return {id,name,price,icon,effect};
+    return {id,name,price,icon,effect,...(effect.type==='remove_debuff'?{cooldownMinutes:7200}:{})};
   }
   function validateCatalog(raw) {
     if(!raw||raw.version!==1||!Array.isArray(raw.items)||raw.items.length>500)throw Error('버전 1 상점 아이템 JSON이 아닙니다.');
@@ -59,7 +60,7 @@
       const labels={speed:'작업 속도',arrival:'의뢰 도착 확률',exp:'획득 EXP'};
       return (labels[effect.target]||effect.target)+' +'+effect.value+(effect.target==='arrival'?'%p':'%')+' · '+effect.durationMinutes+'게임분';
     }
-    if(effect.type==='remove_debuff')return '디버프 해제: '+effect.target;
+    if(effect.type==='remove_debuff')return '디버프 해제: '+(effect.targets??[effect.target]).join(', ')+' · 5게임일 재사용 대기';
     return '';
   }
   function iconSource(path) {
@@ -138,8 +139,9 @@
       form.elements.namedItem('buffValue').value=e.value??0;
       form.elements.namedItem('durationMinutes').value=e.durationMinutes??1;
     }else{
-      effectFields.innerHTML='<div class="effect-inputs single"><label>해제할 디버프 ID<input name="debuffTarget" placeholder="wrist" required maxlength="64"></label></div>';
-      form.elements.namedItem('debuffTarget').value=e.target||'';
+      effectFields.innerHTML='<div class="effect-inputs single"><label>해제할 디버프 ID (쉼표로 구분)<input name="debuffTargets" placeholder="focus-loss, brain-fog" required></label><label>재사용 시간 (게임분)<input name="cooldownMinutes" type="number" min="7200" max="7200" step="1" required></label></div>';
+      form.elements.namedItem('debuffTargets').value=(e.targets??[e.target].filter(Boolean)).join(', ');
+      form.elements.namedItem('cooldownMinutes').value=draft.cooldownMinutes??7200;
     }
   }
   function readDraft() {
@@ -149,7 +151,7 @@
     const type=$('effect-type').value;
     if(type==='fatigue_change')draft.effect={type,amount:Number(form.elements.namedItem('amount').value)};
     if(type==='timed_buff')draft.effect={type,target:form.elements.namedItem('buffTarget').value,value:Number(form.elements.namedItem('buffValue').value),durationMinutes:Number(form.elements.namedItem('durationMinutes').value)};
-    if(type==='remove_debuff')draft.effect={type,target:form.elements.namedItem('debuffTarget').value.trim()};
+    if(type==='remove_debuff'){draft.effect={type,targets:form.elements.namedItem('debuffTargets').value.split(',').map(x=>x.trim()).filter(Boolean)};draft.cooldownMinutes=Number(form.elements.namedItem('cooldownMinutes').value);}else delete draft.cooldownMinutes;
   }
   function renderPreview() {
     const d=draft;
@@ -243,3 +245,4 @@
   }
   init();
 })();
+
