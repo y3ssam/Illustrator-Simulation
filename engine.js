@@ -4,6 +4,13 @@
   const MAX_LEVEL = 100;
   const TYPES = ['낙서', '단색', '풀채색'], SCOPES = ['두상', '흉상', '반신', '전신'];
   const UNLOCKS = TYPES.flatMap((type,t)=>SCOPES.map((scope,c)=>({type,scope,level:[[0,0,2,5],[3,7,12,18],[9,14,21,25]][t][c]})));
+  // Work times are base game minutes (one game minute = one real second before speed bonuses).
+  // Payout ranges are base money before skill bonuses, rolled once per new job.
+  const JOB_BALANCE = [
+    [{work:[20,25],gold:[5000,10000]},{work:[35,40],gold:[12500,18000]},{work:[45,55],gold:[23000,28500]},{work:[60,70],gold:[35000,42000]}],
+    [{work:[35,45],gold:[20000,25000]},{work:[47,55],gold:[27000,30000]},{work:[60,70],gold:[38000,45000]},{work:[90,110],gold:[50000,60000]}],
+    [{work:[60,90],gold:[50000,60000]},{work:[80,120],gold:[60000,75000]},{work:[150,240],gold:[90000,130000]},{work:[210,300],gold:[120000,180000]}]
+  ];
   const PRACTICE = {duration:240,exp:15};
   const TIPS = { common: 1000, uncommon: 3000, rare: 8000, legendary: 20000 };
   const EVENTS = [
@@ -131,7 +138,17 @@
     openTypes(){return this.unlocked().filter(u=>!this.s.closedTypes.includes(UNLOCKS.indexOf(u)));}
     toggleType(index){const u=UNLOCKS[index];if(!Number.isInteger(index)||!u||u.level>this.s.level)return false;const closed=this.s.closedTypes.includes(index);this.s.closedTypes=closed?this.s.closedTypes.filter(i=>i!==index):[...this.s.closedTypes,index];this.log(u.type+' '+u.scope+' 의뢰 접수 '+(closed?'열림':'닫음'));return true;}
     arrivalChance(){if(!this.openTypes().length)return 0;return Math.min(20,2+this.stats().skill*.05+this.s.buffs.reduce((n,b)=>n+(b.arrival||0),0));}
-    createJob(source='normal',applicant){const options=this.openTypes();if(!options.length)return null;const u=options[Math.floor(this.random()*options.length)],t=TYPES.indexOf(u.type),c=SCOPES.indexOf(u.scope),size=[1,1.5,2,3][c],exp=10+t*10+(size-1)*10;const j={id:'q'+(++this.s.seq),type:u.type,scope:u.scope,source,exp,gold:Math.floor(exp*1800*(1+this.stats().skill*.005)+this.random()*1000),work:(60+(t+1)*60+size*120)*1.6,done:0,deadline:this.s.now+(2+Math.floor(this.random()*4))*1440,expires:this.s.now+720,inboxWait:0};if(applicant){j.applicant=applicant.id;j.gold=Math.floor(j.gold*1.7);j.exp=Math.floor(j.exp*1.25);}return j;}
+    createJob(source='normal',applicant){
+      const options=this.openTypes();if(!options.length)return null;
+      const u=options[Math.floor(this.random()*options.length)],t=TYPES.indexOf(u.type),c=SCOPES.indexOf(u.scope),size=[1,1.5,2,3][c],exp=10+t*10+(size-1)*10;
+      const balance=JOB_BALANCE[t][c];
+      const roll=([min,max])=>min+Math.floor(this.random()*(max-min+1));
+      const j={id:'q'+(++this.s.seq),type:u.type,scope:u.scope,source,exp,
+        gold:Math.floor(roll(balance.gold)*(1+this.stats().skill*.005)),
+        work:roll(balance.work),done:0,
+        deadline:this.s.now+(2+Math.floor(this.random()*4))*1440,expires:this.s.now+720,inboxWait:0};
+      if(applicant){j.applicant=applicant.id;j.gold=Math.floor(j.gold*1.7);j.exp=Math.floor(j.exp*1.25);}return j;
+    }
     startFresh(name){if(typeof name!=='string'||!name.trim())return false;this.s=fresh();this.s.name=name.trim().slice(0,40);this.log('작업실을 열었습니다. 낙서 두상·흉상으로 시작하고, 의뢰가 없으면 자동으로 연습합니다.');return true;}
     startPractice(){if(this.s.active||this.s.restUntil>this.s.now)return false;this.s.practicing=true;this.log('그림 연습 시작 · 4게임시간 / 15 EXP / 중단 시 진행도 보존');return true;}
     togglePractice(){this.s.autoPractice=!this.s.autoPractice;this.s.practicing=false;this.log('자동 연습 '+(this.s.autoPractice?'켜짐':'꺼짐')+' · 의뢰 작업이 우선입니다.');}
@@ -183,7 +200,7 @@
       else if(q){q.done=Math.min(q.work,q.done+this.rate());this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate());if(q.done>=q.work&&this.s.now<=q.deadline)this.complete(q);if(this.s.fatigue>=90)this.rest();}
       else if(this.s.autoPractice||this.s.practicing){this.s.practiceDone++;this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate()*.5);if(this.s.practiceDone>=PRACTICE.duration){this.s.practiceDone=0;this.s.practicing=false;this.s.totals.practiceSessions++;this.gainExp(PRACTICE.exp);this.log('그림 연습 완료 · 15 EXP');}if(this.s.fatigue>=90)this.rest();}
       for(const j of [...this.s.jobs])if(j.deadline<=this.s.now){this.s.jobs=this.s.jobs.filter(k=>k!==j);this.s.queueOrder=this.s.queueOrder.filter(id=>id!==j.id);if(this.s.active===j.id)this.s.active=null;this.s.totals.failed++;this.log(j.type+' '+j.scope+' 마감 초과 · 의뢰 종료');}
-      const week=Math.floor(this.s.now/10080);if(week>this.s.lastFoodWeek){const cost=(week-this.s.lastFoodWeek)*55000;this.money(-cost);this.s.lastFoodWeek=week;this.log('주간 식비 '+cost+'원 지출');}
+      const week=Math.floor(this.s.now/10080);if(week>this.s.lastFoodWeek){const cost=(week-this.s.lastFoodWeek)*350000;this.money(-cost);this.s.lastFoodWeek=week;this.log('주간 식비 '+cost+'원 지출');}
       if(++this.s.arrivalClock>=10){this.s.arrivalClock=0;this.arrivals();}
       if(++this.s.eventClock>=48){this.s.eventClock=0;if(this.random()<.12)this.triggerEvent(EVENTS[Math.floor(this.random()*EVENTS.length)].id);}
       this.admit();
@@ -191,6 +208,6 @@
     import(raw){const next=[2,VERSION].includes(raw?.version)?validateSave(raw):migrateLegacy(raw);this.s=next;this.log('저장 데이터 불러오기 완료');return true;}
     export(){return copy(this.s);}
   }
-  const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE};
+  const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE,JOB_BALANCE};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudioCore=api;
 })(globalThis);
