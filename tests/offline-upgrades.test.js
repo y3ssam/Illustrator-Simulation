@@ -64,19 +64,19 @@ assert.deepEqual(((r)=>[r.money,r.exp])(jobResult(true,5,5)),[5000,10],'both max
 
 const practice=new Engine(null,[]);
 practice.s.auto=false;practice.s.autoAccept=false;practice.s.autoPractice=true;practice.s.money=0;
-practice.advance(240,true);
-assert.equal(practice.s.exp,1,'offline auto-practice EXP uses same multiplier');
+practice.advance(30,true);
+assert.equal(practice.s.exp,0,'2 EXP * 10% rounds down to zero');
 const practiceMax=new Engine(null,[]);
 practiceMax.s.auto=false;practiceMax.s.autoAccept=false;practiceMax.s.autoPractice=true;practiceMax.s.offlineUpgrades.chair=5;
-practiceMax.advance(240,true);
-assert.equal(practiceMax.s.exp,7,'15 * 50% rounds down');
+practiceMax.advance(30,true);
+assert.equal(practiceMax.s.exp,1,'2 * 50% awards 1 EXP');
 
 const food=new Engine(null,[]);
 food.s.money=1000000;food.s.auto=false;food.s.autoAccept=false;food.s.autoPractice=false;
 food.s.now=10079;food.s.lastFoodWeek=0;
 food.advance(1,true);
-assert.equal(food.s.money,650000,'weekly food remains at full cost');
-assert.equal(food.s.totals.expense,350000);
+assert.equal(food.s.money,825000,'weekly food remains at full cost');
+assert.equal(food.s.totals.expense,175000);
 
 const sleep=new Engine(null,[]);
 sleep.s.auto=false;sleep.s.autoAccept=false;sleep.s.autoPractice=true;sleep.s.fatigue=89.99;
