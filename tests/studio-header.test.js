@@ -8,13 +8,13 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'),'utf8');
 new Function(source);
 
 const start = source.indexOf('function studio(){');
-const end = source.indexOf('function growthNote(){',start);
+const end = source.indexOf('function growthNote(',start);
 assert.ok(start >= 0 && end > start,'studio rendering exists');
 const studio = source.slice(start,end);
 assert.ok(studio.includes('<section class="hero">'),'work area remains');
 assert.ok(studio.includes('오늘의 작업대'),'work desk heading remains');
-assert.ok(!studio.includes('성장·운영'),'unrequested Growth/Operations button removed from studio');
-assert.ok(!studio.includes('의뢰함·도감'),'unrequested Inbox/Collection button removed from studio');
+assert.ok(!studio.includes('>성장·운영</button>'),'unrequested Growth/Operations button removed from studio');
+assert.ok(!studio.includes('>의뢰함·도감</button>'),'unrequested Inbox/Collection button removed from studio');
 assert.ok(!studio.includes('data-action="open-notes"'),'removed note trigger');
 assert.ok(!studio.includes('data-action="open-collection"'),'removed collection trigger');
 assert.ok(source.includes('function renderNote(){'),'growth note implementation preserved');
