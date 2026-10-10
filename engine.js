@@ -50,7 +50,7 @@
     });
   }
   function fresh(seed=Date.now()) {
-    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,offlineUpgrades:{tablet:0,chair:0},level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,practiceDuration:PRACTICE.duration,repair:'safe',restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],buffs:[],choices:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,eventClock:0,lastFoodWeek:0};
+    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,offlineUpgrades:{tablet:0,chair:0},inventory:{},level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,practiceDuration:PRACTICE.duration,repair:'safe',restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],buffs:[],choices:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,eventClock:0,lastFoodWeek:0};
   }
   function validateSave(raw) {
     if (!raw || ![2,VERSION].includes(raw.version)) fail('지원하지 않는 저장 파일입니다.');
@@ -60,6 +60,16 @@
     for(const k of ['now','restUntil'])s[k]=number(raw[k],0,1e10,k);
     s.money=number(raw.money,-1e12,1e12,'잔액');
     for(const key of ['tablet','chair'])s.offlineUpgrades[key]=number(raw.offlineUpgrades?.[key]??0,0,5,'오프라인 업그레이드',true);
+    // Older v2/v3 saves have no inventory field; initialize them with an empty inventory.
+    if(raw.inventory!==undefined){
+      if(!raw.inventory||typeof raw.inventory!=='object'||Array.isArray(raw.inventory))fail('인벤토리 형식을 확인해주세요.');
+      const entries=Object.entries(raw.inventory);
+      if(entries.length>500)fail('인벤토리 아이템 종류가 너무 많습니다.');
+      for(const [id,count] of entries){
+        if(!/^[a-z][a-z0-9_-]{0,63}$/.test(id))fail('인벤토리 아이템 ID를 확인해주세요.');
+        s.inventory[id]=number(count,1,Number.MAX_SAFE_INTEGER,'아이템 수량',true);
+      }
+    }
     for(const k of ['level','points','skill','plan','speed','seq','lastFoodWeek'])s[k]=number(raw[k],0,raw.version===2?1e7:(k==='level'?100:k==='points'?100:['skill','plan','speed'].includes(k)?150:1e7),k,true);
     s.exp=number(raw.exp,0,99,'경험치',true);s.fatigue=number(raw.fatigue,0,100,'피로');s.seed=number(raw.seed,1,4294967295,'난수 상태',true);
     for(const k of ['arrivalClock','eventClock'])s[k]=number(raw[k],0,48,k);
@@ -139,25 +149,45 @@
       this.log((kind==='tablet'?'액정 타블렛':'의자')+' '+(level+1)+'단계 업그레이드 · '+cost.toLocaleString('ko-KR')+'원 지출 / 오프라인 '+(kind==='tablet'?'수익':'EXP')+' '+this.offlineRate(kind)+'%');
       return true;
     }
-    // A shop purchase consumes the item immediately; there is no inventory yet.
+    // Shop items use their stable catalog IDs as inventory keys.
     canPurchaseShopItem(item){
       if(!item||typeof item!=='object'||typeof item.id!=='string'||!/^[a-z][a-z0-9_-]{0,63}$/.test(item.id)
          ||typeof item.name!=='string'||!item.name.trim()||item.name.length>80
          ||!Number.isSafeInteger(item.price)||item.price<0||item.price>1e9)return '아이템 정보를 확인해주세요.';
       const effect=item.effect;
       if(!effect||effect.type!=='fatigue_change'||!Number.isInteger(effect.amount)
-         ||effect.amount>=0||effect.amount< -100)return '아직 사용할 수 없는 아이템입니다.';
+         ||effect.amount>=0||effect.amount< -100)return '아직 구매할 수 없는 아이템입니다.';
+      const count=this.inventoryCount(item.id);
+      if(count>=Number.MAX_SAFE_INTEGER)return '아이템 보유 수량이 최대치입니다.';
       if(this.s.money<item.price)return '잔액이 부족합니다.';
-      if(this.s.fatigue<=0)return '피로도가 이미 0입니다.';
       return '';
+    }
+    inventoryCount(id){
+      return Object.hasOwn(this.s.inventory,id)?this.s.inventory[id]:0;
     }
     purchaseShopItem(item){
       if(this.canPurchaseShopItem(item))return false;
-      const before=this.s.fatigue;
       this.money(-item.price);
+      this.s.inventory[item.id]=this.inventoryCount(item.id)+1;
+      this.log(item.name+' 구매 · '+item.price.toLocaleString('ko-KR')+'원 지출 / 보유 '+this.inventoryCount(item.id)+'개');
+      return true;
+    }
+    canUseShopItem(item){
+      if(!item||typeof item.id!=='string'||!item.effect||item.effect.type!=='fatigue_change'
+         ||!Number.isInteger(item.effect.amount)||item.effect.amount>=0||item.effect.amount< -100)return '아직 사용할 수 없는 아이템입니다.';
+      if(this.inventoryCount(item.id)<1)return '보유한 아이템이 없습니다.';
+      if(this.s.fatigue<=0)return '피로도가 이미 0입니다.';
+      return '';
+    }
+    useShopItem(item){
+      if(this.canUseShopItem(item))return false;
+      const before=this.s.fatigue;
+      const count=this.inventoryCount(item.id);
       this.s.fatigue=Math.max(0,before+item.effect.amount);
+      if(count===1)delete this.s.inventory[item.id];
+      else this.s.inventory[item.id]=count-1;
       const recovered=Number((before-this.s.fatigue).toFixed(2));
-      this.log(item.name+' 구매·사용 · '+item.price.toLocaleString('ko-KR')+'원 지출 / 피로도 '+recovered+' 감소');
+      this.log(item.name+' 사용 · 피로도 '+recovered+' 감소 / 보유 '+(count-1)+'개');
       return true;
     }
     stats(){return {skill:this.s.skill,plan:this.s.plan,speed:this.s.speed};}
