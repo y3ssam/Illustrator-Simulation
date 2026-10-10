@@ -4,53 +4,103 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {Engine, VERSION} = require('../engine.js');
-const itemFile = JSON.parse(fs.readFileSync(path.join(__dirname,'../data/shop-items.json'),'utf8'));
-const soda = itemFile.items.find(x => x.id==='soft-drink');
-assert.equal(VERSION,3,'기존 저장 버전 유지');
-assert.ok(soda,'탄산음료 데이터가 있어야 합니다.');
+const catalog = JSON.parse(fs.readFileSync(path.join(__dirname,'../data/shop-items.json'),'utf8'));
+const soda = catalog.items.find(item => item.id === 'soft-drink');
+assert.equal(VERSION,3,'save format remains v3');
+assert.ok(soda,'탄산음료 상품 데이터');
 assert.equal(soda.price,2200);
 assert.deepEqual(soda.effect,{type:'fatigue_change',amount:-10});
-assert.ok(fs.existsSync(path.join(__dirname,'..',soda.icon)),'아이콘이 존재해야 합니다.');
-function game(money,fatigue) {const e=new Engine(null,[]);e.s.money=money;e.s.fatigue=fatigue;return e;}
+assert.ok(fs.existsSync(path.join(__dirname,'..',soda.icon)),'icon preserved');
 
-const usual=game(4000,37);
+function game(money,fatigue){
+  const e=new Engine(null,[]);
+  e.s.money=money;e.s.fatigue=fatigue;
+  return e;
+}
+
+const usual=game(10000,37);
+assert.deepEqual(usual.s.inventory,{},'new games start with empty inventory');
 assert.equal(usual.canPurchaseShopItem(soda),'');
 assert.equal(usual.purchaseShopItem(soda),true);
-assert.equal(usual.s.money,1800);
-assert.equal(usual.s.fatigue,27);
+assert.equal(usual.s.money,7800);
+assert.equal(usual.s.fatigue,37,'buying does not recover fatigue');
+assert.equal(usual.inventoryCount(soda.id),1);
 assert.equal(usual.s.totals.expense,2200);
-assert.ok(usual.s.logs[0].text.includes('탄산음료'));
-const reloaded=new Engine(usual.export(),[]);
-assert.equal(reloaded.s.money,1800,'잔액 저장 호환');
-assert.equal(reloaded.s.fatigue,27,'피로도 저장 호환');
-assert.equal(reloaded.s.totals.expense,2200,'누적 지출 저장 호환');
+assert.equal(usual.purchaseShopItem(soda),true,'items can stack');
+assert.equal(usual.s.money,5600);
+assert.equal(usual.inventoryCount(soda.id),2);
+assert.equal(usual.s.totals.expense,4400);
+assert.equal(usual.canUseShopItem(soda),'');
+assert.equal(usual.useShopItem(soda),true);
+assert.equal(usual.s.fatigue,27);
+assert.equal(usual.inventoryCount(soda.id),1);
+assert.equal(usual.s.money,5600,'using item costs no extra money');
+assert.equal(usual.s.totals.expense,4400);
+
+const afterSave=new Engine(usual.export(),[]);
+assert.equal(afterSave.s.money,5600,'money survives reload');
+assert.equal(afterSave.s.fatigue,27,'fatigue survives reload');
+assert.equal(afterSave.inventoryCount(soda.id),1,'inventory quantity survives reload');
+assert.equal(afterSave.s.totals.expense,4400,'cumulative expense survives reload');
+assert.equal(afterSave.useShopItem(soda),true);
+assert.equal(afterSave.s.fatigue,17);
+assert.equal(afterSave.inventoryCount(soda.id),0,'last consumption removes the stack');
+assert.deepEqual(afterSave.s.inventory,{},'no empty stack remains');
+assert.equal(afterSave.useShopItem(soda),false,'cannot use unowned items');
 
 const low=game(2200,3);
 assert.equal(low.purchaseShopItem(soda),true);
-assert.equal(low.s.fatigue,0,'0 미만으로 내려가지 않는다');
+assert.equal(low.useShopItem(soda),true);
+assert.equal(low.s.fatigue,0,'fatigue floor zero');
 assert.equal(low.s.money,0);
-assert.equal(low.s.totals.expense,2200);
+
+const rested=game(4400,0);
+assert.equal(rested.purchaseShopItem(soda),true,'can buy at zero fatigue for later');
+assert.equal(rested.inventoryCount(soda.id),1);
+const beforeRested=JSON.stringify(rested.export());
+assert.equal(rested.canUseShopItem(soda),'피로도가 이미 0입니다.');
+assert.equal(rested.useShopItem(soda),false);
+assert.equal(JSON.stringify(rested.export()),beforeRested,'cannot consume item uselessly at zero fatigue');
 
 const broke=game(2199,40);
-const oldBroke=JSON.stringify(broke.export());
+const beforeBroke=JSON.stringify(broke.export());
 assert.equal(broke.purchaseShopItem(soda),false);
-assert.equal(JSON.stringify(broke.export()),oldBroke,'잔액 부족: 전체 상태 변경 금지');
-
-const rested=game(10000,0);
-const oldRested=JSON.stringify(rested.export());
-assert.equal(rested.purchaseShopItem(soda),false);
-assert.equal(JSON.stringify(rested.export()),oldRested,'피로도 0: 전체 상태 변경 금지');
+assert.equal(JSON.stringify(broke.export()),beforeBroke,'failed payment does not alter inventory or funds');
 
 const unsupported=game(10000,80);
-assert.equal(unsupported.purchaseShopItem({...soda,effect:{type:'timed_buff',target:'speed',value:20,durationMinutes:60}}),false);
-assert.equal(unsupported.s.money,10000,'미지원 효과에서 지출 금지');
+const buff={...soda,id:'unimplemented',effect:{type:'timed_buff',target:'speed',value:20,durationMinutes:60}};
+assert.equal(unsupported.purchaseShopItem(buff),false);
+assert.equal(unsupported.inventoryCount(buff.id),0);
+assert.equal(unsupported.s.money,10000);
+
+const priorSave=game(12345,30).export();
+delete priorSave.inventory; // v3 saves created before the inventory feature
+const priorLoaded=new Engine(priorSave,[]);
+assert.deepEqual(priorLoaded.s.inventory,{});
+assert.equal(priorLoaded.s.money,12345);
+assert.equal(priorLoaded.s.fatigue,30);
+assert.equal(priorLoaded.s.offlineUpgrades.tablet,0);
+assert.equal(priorLoaded.s.offlineUpgrades.chair,0);
+
+assert.throws(()=>new Engine({...priorSave,inventory:[]},[]),'reject nonobject inventory');
+assert.throws(()=>new Engine({...priorSave,inventory:{'soft-drink':-1}},[]),'reject negative stock');
+assert.throws(()=>new Engine({...priorSave,inventory:{'soft-drink':1.5}},[]),'reject fractional stock');
+assert.throws(()=>new Engine({...priorSave,inventory:{'invalid id':2}},[]),'reject malformed item IDs');
+const max=game(5000,10);
+max.s.inventory[soda.id]=Number.MAX_SAFE_INTEGER;
+assert.equal(max.purchaseShopItem(soda),false,'prevent unsafe stack increment');
 
 const app=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
 const css=fs.readFileSync(path.join(__dirname,'../reference.css'),'utf8');
 new Function(app);
-assert.ok(app.includes("fetch('data/shop-items.json'"),'제작 도구의 데이터 파일을 읽는다');
-assert.ok(app.includes("content=shop()"),'상점 탭과 연결');
-assert.ok(app.includes("engine.purchaseShopItem(item)"),'구매 클릭과 엔진 연결');
-assert.ok(css.includes('.shop-item-controls'),'상점 반응형 스타일 존재');
-assert.ok(app.includes("studio.workbench.v2"),'기존 로컬 저장 키 유지');
-console.log('Shop integration tests passed.');
+assert.ok(app.includes("fetch('data/shop-items.json'"),'editor catalog loaded by game');
+assert.ok(app.includes('content=shop()'),'shop tab connected');
+assert.ok(app.includes('engine.purchaseShopItem(item)'),'purchase click connected');
+assert.ok(app.includes('engine.useShopItem(item)'),'use click connected');
+assert.ok(app.includes("button('buy-shop:'+item.id,'구매'"),'shop shows buy only');
+assert.ok(app.includes("button('use-shop:'+id,'사용'"),'inventory shows use button');
+assert.ok(app.includes('shop-inventory-quantity'),'inventory badge');
+assert.ok(app.includes("'×'+count"),'stack counter displayed');
+assert.ok(css.includes('.shop-inventory-quantity')&&css.includes('bottom:-5px'),'counter bottom-right');
+assert.ok(app.includes("studio.workbench.v2"),'save key unchanged');
+console.log('Shop inventory purchase/use and save compatibility checks passed.');
