@@ -1,5 +1,10 @@
 # 변경 기록
 
+## 2026-10-11 — 연습·의뢰 작업대 높이 통일
+- `app.js`: 그림 연습의 보상 아래에 보이지 않는 줄을 예약해 의뢰 경험치 줄과 같은 높이로 표시.
+- `reference.css`: 좁은 모바일과 PC 3열 배치에서 긴 금액이 줄바꿈되는 경우를 위한 보상·시간 영역 최소 높이 설정.
+- `index.html`: 앱·스타일 캐시 주소 갱신.
+
 ## 2026-10-11 — 그림 연습 이미지 자동 반영
 - `scripts/generate-thumbnail-index.js`: `drawing practice` 폴더도 기존 이미지 목록 생성 대상에 포함. 새 파일 추가·삭제 시 GitHub Actions가 목록을 갱신.
 - `data/thumbnail-index.json`: 현재 업로드된 연습 이미지 `01.png`~`07.png` 반영.
