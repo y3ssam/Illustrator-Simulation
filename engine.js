@@ -16,7 +16,8 @@
     [{work:[35,45],gold:[20000,25000]},{work:[47,55],gold:[27000,30000]},{work:[60,70],gold:[38000,45000]},{work:[90,110],gold:[50000,60000]}],
     [{work:[60,90],gold:[50000,60000]},{work:[80,120],gold:[60000,75000]},{work:[150,240],gold:[90000,130000]},{work:[210,300],gold:[120000,180000]}]
   ];
-  const PRACTICE = {duration:240,exp:15};
+  const PRACTICE = {duration:30,exp:2};
+  const WEEKLY_FOOD_COST = 175000;
   const TIPS = { common: 1000, uncommon: 3000, rare: 8000, legendary: 20000 };
   const EVENTS = [
     { id:'praise', name:'극찬 후기', desc:'신규 의뢰 확률 +3%p.', duration:300, arrival:3 },
@@ -49,7 +50,7 @@
     });
   }
   function fresh(seed=Date.now()) {
-    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,offlineUpgrades:{tablet:0,chair:0},level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,repair:'safe',restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],buffs:[],choices:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,eventClock:0,lastFoodWeek:0};
+    return {version:VERSION,name:'어쩌구',now:420,money:STARTING_MONEY,offlineUpgrades:{tablet:0,chair:0},level:0,exp:0,points:0,skill:0,plan:0,speed:0,fatigue:0,auto:true,autoAccept:true,autoPractice:true,practicing:false,practiceDone:0,practiceDuration:PRACTICE.duration,repair:'safe',restUntil:0,active:null,jobs:[],queueOrder:[],closedTypes:[],reservations:[],inbox:[],buffs:[],choices:[],met:[],collection:[],logs:[],totals:{completed:0,failed:0,income:0,expense:0,tips:0,practiceSessions:0},lottoDay:-1,seq:0,seed:(seed>>>0)||1,arrivalClock:0,eventClock:0,lastFoodWeek:0};
   }
   function validateSave(raw) {
     if (!raw || ![2,VERSION].includes(raw.version)) fail('지원하지 않는 저장 파일입니다.');
@@ -64,7 +65,11 @@
     for(const k of ['arrivalClock','eventClock'])s[k]=number(raw[k],0,48,k);
     const oldEquipment=raw.version===2?Object.fromEntries(['computer','tablet','chair'].map(k=>[k,number(raw.eq?.[k],0,1e7,'장비',true)])):null;
     if(typeof raw.auto!=='boolean'||!['safe','frugal'].includes(raw.repair))fail('운영 정책을 확인해주세요.');s.auto=raw.auto;s.repair=raw.repair;if(raw.autoAccept!==undefined&&typeof raw.autoAccept!=='boolean')fail('자동 수락 설정을 확인해주세요.');s.autoAccept=raw.autoAccept??raw.auto;
-    for(const k of ['autoPractice','practicing']){if(raw[k]!==undefined&&typeof raw[k]!=='boolean')fail('연습 설정을 확인해주세요.');s[k]=raw[k]??(k==='autoPractice'?raw.auto:s[k]);}s.practiceDone=number(raw.practiceDone??0,0,PRACTICE.duration-1,'연습 진행도',true);
+    for(const k of ['autoPractice','practicing']){if(raw[k]!==undefined&&typeof raw[k]!=='boolean')fail('연습 설정을 확인해주세요.');s[k]=raw[k]??(k==='autoPractice'?raw.auto:s[k]);}const oldPracticeDuration=number(raw.practiceDuration??240,30,240,'연습 주기',true);
+    if(![30,240].includes(oldPracticeDuration))fail('지원하지 않는 연습 주기입니다.');
+    const oldPracticeDone=number(raw.practiceDone??0,0,oldPracticeDuration-1,'연습 진행도',true);
+    s.practiceDone=oldPracticeDuration===PRACTICE.duration?oldPracticeDone:Math.floor(oldPracticeDone*PRACTICE.duration/oldPracticeDuration);
+    s.practiceDuration=PRACTICE.duration;
     const closed=raw.closedTypes??[];if(!Array.isArray(closed)||closed.length>12||new Set(closed).size!==closed.length||closed.some(i=>!Number.isInteger(i)||i<0||i>=UNLOCKS.length))fail('타입 접수 설정을 확인해주세요.');s.closedTypes=[...closed];
     s.lottoDay=number(raw.lottoDay,-1,1e7,'복권 날짜',true);
     const jobIDs=new Set();
@@ -176,7 +181,7 @@
       if(applicant){j.applicant=applicant.id;j.gold=Math.floor(j.gold*1.7);j.exp=Math.floor(j.exp*1.25);}return j;
     }
     startFresh(name){if(typeof name!=='string'||!name.trim())return false;this.s=fresh();this.s.name=name.trim().slice(0,40);this.log('작업실을 열었습니다. 낙서 두상·흉상으로 시작하고, 의뢰가 없으면 자동으로 연습합니다.');return true;}
-    startPractice(){if(this.s.active||this.s.restUntil>this.s.now)return false;this.s.practicing=true;this.log('그림 연습 시작 · 4게임시간 / 15 EXP / 중단 시 진행도 보존');return true;}
+    startPractice(){if(this.s.active||this.s.restUntil>this.s.now)return false;this.s.practicing=true;this.log('그림 연습 시작 · '+PRACTICE.duration+'게임분 / '+PRACTICE.exp+' EXP / 중단 시 진행도 보존');return true;}
     togglePractice(){this.s.autoPractice=!this.s.autoPractice;this.s.practicing=false;this.log('자동 연습 '+(this.s.autoPractice?'켜짐':'꺼짐')+' · 의뢰 작업이 우선입니다.');}
     orderedJobs(extra){const rows=[...this.s.jobs];if(extra)rows.push(extra);const order=new Map(this.s.queueOrder.map((id,i)=>[id,i]));return rows.sort((a,b)=>(order.get(a.id)??1e9)-(order.get(b.id)??1e9)||a.deadline-b.deadline);}
     reorder(id,before){if(id===this.s.active)return false;const waiting=this.orderedJobs().filter(q=>q.id!==this.s.active);const q=waiting.find(q=>q.id===id);if(!q||(before&&!waiting.some(q=>q.id===before)))return false;if(id===before)return true;const rest=waiting.filter(row=>row!==q);const index=before?rest.findIndex(row=>row.id===before):rest.length;rest.splice(index,0,q);this.s.queueOrder=rest.map(row=>row.id);this.log('대기 순서를 바꿨습니다. 현재 작업은 유지합니다.');return true;}
@@ -237,7 +242,7 @@
       else if(q){q.done=Math.min(q.work,q.done+this.rate());this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate());if(q.done>=q.work&&this.s.now<=q.deadline)this.complete(q,offline);if(this.s.fatigue>=90)this.rest();}
       else if(this.s.autoPractice||this.s.practicing){this.s.practiceDone++;this.s.fatigue=Math.min(100,this.s.fatigue+this.fatigueRate()*.5);if(this.s.practiceDone>=PRACTICE.duration){this.s.practiceDone=0;this.s.practicing=false;this.s.totals.practiceSessions++;const practiceExp=offline?Math.floor(PRACTICE.exp*this.offlineRate('chair')/100):PRACTICE.exp;this.gainExp(practiceExp);this.log('그림 연습 완료'+(offline?' (오프라인)':'')+' · '+practiceExp+' EXP');}if(this.s.fatigue>=90)this.rest();}
       for(const j of [...this.s.jobs])if(j.deadline<=this.s.now){this.s.jobs=this.s.jobs.filter(k=>k!==j);this.s.queueOrder=this.s.queueOrder.filter(id=>id!==j.id);if(this.s.active===j.id)this.s.active=null;this.s.totals.failed++;this.log(j.type+' '+j.scope+' 마감 초과 · 의뢰 종료');}
-      const week=Math.floor(this.s.now/10080);if(week>this.s.lastFoodWeek){const cost=(week-this.s.lastFoodWeek)*350000;this.money(-cost);this.s.lastFoodWeek=week;this.log('주간 식비 '+cost+'원 지출');}
+      const week=Math.floor(this.s.now/10080);if(week>this.s.lastFoodWeek){const cost=(week-this.s.lastFoodWeek)*WEEKLY_FOOD_COST;this.money(-cost);this.s.lastFoodWeek=week;this.log('주간 식비 '+cost+'원 지출');}
       if(++this.s.arrivalClock>=10){this.s.arrivalClock=0;this.arrivals();}
       if(++this.s.eventClock>=48){this.s.eventClock=0;if(this.random()<.12)this.triggerEvent(EVENTS[Math.floor(this.random()*EVENTS.length)].id);}
       this.admit();
@@ -245,6 +250,6 @@
     import(raw){const next=[2,VERSION].includes(raw?.version)?validateSave(raw):migrateLegacy(raw);this.s=next;this.log('저장 데이터 불러오기 완료');return true;}
     export(){return copy(this.s);}
   }
-  const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE,JOB_BALANCE,STARTING_MONEY,PROMOTION_COST,OFFLINE_BASE_RATE,UPGRADE_RATE_STEPS,UPGRADE_COSTS};
+  const api={MAX_LEVEL,VERSION,Engine,fresh,validateSave,validateCatalog,migrateLegacy,TIPS,EVENTS,UNLOCKS,PRACTICE,JOB_BALANCE,STARTING_MONEY,PROMOTION_COST,OFFLINE_BASE_RATE,UPGRADE_RATE_STEPS,UPGRADE_COSTS,WEEKLY_FOOD_COST};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudioCore=api;
 })(globalThis);
